@@ -32,5 +32,5 @@ Threading contract
     * The pool size is bounded (e.g. ``max(1, cpu_count - 1)``) so a huge folder
       cannot saturate the machine.
 
-Not implemented yet (milestone M1).
+Not implemented yet (planned; scanning, decoding and moves run on the GUI thread today).
 """

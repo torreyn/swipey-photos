@@ -78,18 +78,23 @@ run against the working tree without reinstalling. Markers `gui` and
 
 ```text
 tests/
-├── conftest.py              # make_images, sample_folder, config fixtures
+├── conftest.py              # make_images, sample_folder, config, dialogs, xdg_dirs
+├── helpers.py               # FakeFileDialog stand-in for the folder picker
 ├── test_architecture.py     # layer rules (no Qt in core/utils, docstrings)
 ├── test_package.py          # version + entry point + importability
 ├── test_gui_smoke.py        # PyQt6/pytest-qt harness works headless (gui)
 ├── test_file_ops.py         # collision naming, EXDEV fallback, reverse moves
 ├── test_folder_manager.py   # category folders, validation, collision suffixes
-├── test_config.py           # defaults, round-trip, validation, XDG overrides
+├── test_config.py           # defaults, round-trip, validation, recents, XDG overrides
 ├── test_image_loader.py     # scanning, EXIF, corrupt files, preview bounds
 ├── test_logging_setup.py    # rotation, levels, namespace, log directory
 ├── test_sorter.py           # queue cursor, counters, undo, vanished files
 ├── test_swipe_card.py       # fit/aspect, drag maths, thresholds, badge, fly-out (gui)
-└── test_swipe_widget.py     # stage: image hand-off, signal forwarding (gui)
+├── test_swipe_widget.py     # stage: image hand-off, caption, signal forwarding (gui)
+├── test_welcome_screen.py   # picker, recent-folder list, emit rules (gui)
+├── test_completion_screen.py # summary text, counts, button signals (gui)
+├── test_main_window.py      # three-page flow, moves, undo, errors, config (gui)
+└── test_app.py              # CLI flags, run(), identity and icon (gui)
 ```
 
 Principles:
@@ -149,9 +154,12 @@ Other tips:
 ### Adding a category
 
 1. Extend `CATEGORIES` in `core/folder_manager.py`.
-2. Map a swipe direction to the new category in `MainWindow` (M2).
-3. Extend `SwipeWidget` feedback colours/labels.
-4. Bind a key in `MainWindow` and update the README shortcut table.
+2. Map a swipe direction and its keys in `MainWindow` (`FOOTER_ORDER`,
+   `CATEGORY_SHORTCUTS`, `CATEGORY_HINTS`) — the footer buttons, the summary
+   rows and the status bar all iterate `CATEGORIES`, so they follow for free.
+3. Extend `CATEGORY_COLORS` in `ui/swipe_card.py` (the badge, footer buttons and
+   summary swatches share it) and the direction map used by the fly-out.
+4. Update the README shortcut table and `docs/ARCHITECTURE.md`.
 5. Add sorter tests for the new destination and its undo path.
 
 ### Changing the move algorithm

@@ -7,20 +7,83 @@ in two ways:
 * ``image-swiper`` — the console script declared in ``pyproject.toml`` as
   ``image-swiper = image_swiper.__main__:main``.
 
-Responsibilities (to be implemented in milestone M1):
+Responsibilities
+    1. Parse the small command-line surface (an optional starting folder,
+       ``--version``, ``--config``, ``--log-level`` and ``--verbose``).
+       Argument parsing lives here rather than in :mod:`image_swiper.app` so the
+       app module stays importable without touching ``sys.argv``.
+    2. Configure logging with :func:`image_swiper.utils.logging_setup.setup_logging`
+       before anything can fail, so startup problems reach the log file.
+    3. Delegate to :func:`image_swiper.app.run` and return its exit code.
 
-1. Parse command-line arguments (``--version``, ``--verbose``, ``--config``,
-   ``--move-mode``, optional starting folder). Argument parsing is intentionally
-   kept here rather than in :mod:`image_swiper.app`, so the app module stays
-   importable without touching ``sys.argv``.
-2. Configure logging via :func:`image_swiper.utils.logging_setup.setup_logging`.
-3. Delegate to :func:`image_swiper.app.run` and return its exit code.
-
-The function below is a placeholder so the console-script entry point resolves
-while the project is still scaffolding. It must not contain application logic.
+Design notes
+    * ``--version`` is answered before Qt is imported, so it also works on a
+      machine where no display (or no Qt platform plugin) is available.
+    * A failure to set up logging is reported on stderr and is *not* fatal: a
+      read-only data directory must not prevent sorting photos.
+    * ``main()`` never calls ``sys.exit`` itself; the ``if __name__`` block and
+      the console-script wrapper do that, which keeps it unit-testable.
 """
 
 from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from . import __version__
+from .app import run
+from .utils.logging_setup import LoggingSetupError, setup_logging
+
+LOG_LEVELS: tuple[str, ...] = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+"""Levels accepted by ``--log-level``."""
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Return the argument parser used by :func:`main`.
+
+    Returns:
+        A parser for ``image-swiper [FOLDER] [options]`` with ``--help`` text
+        that mirrors the documented CLI.
+    """
+    parser = argparse.ArgumentParser(
+        prog="image-swiper",
+        description=(
+            "Sort a folder of photos into Good, Bad, Great and OK subfolders by "
+            "swiping or pressing a key."
+        ),
+    )
+    parser.add_argument(
+        "folder",
+        nargs="?",
+        type=Path,
+        help="folder to open immediately instead of showing the folder picker",
+    )
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        help="print the version and exit",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        metavar="PATH",
+        help="read and write this configuration file instead of the XDG default",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=LOG_LEVELS,
+        metavar="LEVEL",
+        help=f"file log level, one of {', '.join(LOG_LEVELS)} (default: INFO)",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="log at DEBUG level and echo the log to stderr",
+    )
+    return parser
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -32,15 +95,23 @@ def main(argv: list[str] | None = None) -> int:
 
     Returns:
         ``0`` on a clean shutdown, non-zero on startup failure.
-
-    Raises:
-        NotImplementedError: Always, until the CLI milestone lands.
     """
-    del argv  # Unused until the CLI milestone.
-    raise NotImplementedError(
-        "ImageSwiper is still scaffolding: the CLI and UI are not implemented yet. "
-        "See docs/ARCHITECTURE.md and the roadmap in README.md."
-    )
+    args = build_parser().parse_args(argv)
+
+    level = "DEBUG" if args.verbose else args.log_level
+    try:
+        log_file = setup_logging(level=level, console=args.verbose)
+    except (LoggingSetupError, ValueError) as exc:
+        print(f"warning: logging is unavailable ({exc})", file=sys.stderr)
+    else:
+        if args.verbose:
+            print(f"logging to {log_file}", file=sys.stderr)
+
+    if args.version:
+        print(f"ImageSwiper {__version__}")
+        return 0
+
+    return run(argv=[sys.argv[0]], config_path=args.config, folder=args.folder)
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised via the console script

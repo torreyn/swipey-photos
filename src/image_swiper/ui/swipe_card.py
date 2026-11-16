@@ -134,12 +134,14 @@ _EXIT_MARGIN = 24
 
 _CANONICAL: dict[str, str] = {name.casefold(): name for name in CATEGORIES}
 _BADGE_TEXT: dict[str, str] = {GOOD: "GOOD", BAD: "BAD", GREAT: "GREAT", OK: "OK"}
-_BADGE_COLOR: dict[str, str] = {
+CATEGORY_COLORS: dict[str, str] = {
     GOOD: "#3ddc84",
     BAD: "#ff5b5b",
     GREAT: "#f2c14e",
     OK: "#4aa3ff",
 }
+"""One colour per category, shared by the drag badge and the window's buttons."""
+_BADGE_COLOR: dict[str, str] = CATEGORY_COLORS
 _OFFSCREEN: dict[str, tuple[int, int]] = {
     GOOD: (1, 0),
     BAD: (-1, 0),

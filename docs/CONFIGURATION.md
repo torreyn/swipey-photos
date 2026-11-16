@@ -40,6 +40,11 @@ Today the loader reads only the file (plus `XDG_CONFIG_HOME`/
 ```json
 {
   "last_folder": "/home/you/Pictures/2024-06-trip",
+  "recent_folders": [
+    "/home/you/Pictures/2024-06-trip",
+    "/home/you/Pictures/to-sort",
+    "/home/you/Downloads/photos"
+  ],
   "theme": "system",
   "version": 1,
   "window": {
@@ -58,6 +63,7 @@ spaces, so diffs stay small. Order is irrelevant when reading.
 | --- | --- | --- | --- |
 | `version` | integer | `1` | schema version. A value newer than the app supports falls back to defaults with a warning |
 | `last_folder` | string or `null` | `null` | absolute path reopened at start-up; `null` or a blank string means "no folder yet" |
+| `recent_folders` | array of strings | `[]` | up to five newest-first folders offered on the welcome page; blank and duplicate entries are dropped, extra entries are trimmed with a warning |
 | `window.width` | integer | `1200` | remembered window width in logical pixels (200–20000) |
 | `window.height` | integer | `800` | remembered window height in logical pixels (200–20000) |
 | `theme` | string | `"system"` | `system`, `light` or `dark` |
@@ -92,18 +98,20 @@ The UI decides what to show; the loader never silently discards user settings.
 Environment variables are read at call time, which is what lets the test suite
 redirect everything with `monkeypatch.setenv`.
 
-## Command-line flags (planned, M2)
+## Command-line flags
 
 ```text
 image-swiper [FOLDER] [options]
 
-  FOLDER                  start with this folder (skips the picker)
+  FOLDER                  start with this folder (skips the welcome page)
   --version               print version and exit
   --config PATH           use an alternative config file
-  --no-config             ignore the config file, run on defaults
   --log-level LEVEL       DEBUG | INFO | WARNING | ERROR | CRITICAL
-  --log-file PATH         write logs here instead of the data directory
+  -v, --verbose           log at DEBUG level and echo the log to stderr
 ```
+
+`--no-config` and `--log-file` are not implemented yet. A broken config file is
+not fatal: the app starts on defaults and shows a warning in the status bar.
 
 ## Recipes
 

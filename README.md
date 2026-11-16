@@ -26,24 +26,27 @@ gesture per photo.
 
 ![ImageSwiper main window — placeholder mock-up](docs/assets/screenshot-main.svg)
 
-*Placeholder mock-up. Real screenshots (main window, drag feedback, summary
-screen) will replace this once the UI layer is implemented. Drop `*.png` files
-into [`docs/assets/`](docs/assets/) and reference them here.*
+*Placeholder mock-up. The application now runs, so a real screenshot of the main
+window, the drag feedback and the summary can replace this image at any time —
+drop `*.png` files into [`docs/assets/`](docs/assets/) and reference them here
+(`QT_QPA_PLATFORM=offscreen` plus `QWidget.grab()` is enough to capture one).*
 
 ---
 
 ## Project status
 
-`v0.1.0` is a **core-only** release. The Qt-free business layer is implemented
-and tested — image loading with EXIF handling, the four-way sorter with undo,
-the folder manager, collision-safe file operations, JSON configuration and
-rotating logs (212 tests, green on Python 3.11–3.13 in CI). The swipe card
-widget (`ui/swipe_card.py`) now implements the drag physics, rotation,
-directional feedback, fly-out animation and arrow/WASD bindings, and can be run
-on its own with `python -m image_swiper.ui.swipe_card`. The rest of the UI
-(`app.py`, the stage widget, the animator) and the CLI are still documented
-placeholders, so `image-swiper` exits with `NotImplementedError` until the
-window is wired up. See the [roadmap](#roadmap) for what is next.
+`v0.1.0` is **feature-complete for the core loop**. The Qt-free business layer is
+implemented and tested — image loading with EXIF handling, the four-way sorter
+with undo, the folder manager, collision-safe file operations, JSON
+configuration and rotating logs. The Qt side is wired up too: the swipe card
+(drag physics, rotation, directional feedback, fly-out), the stage around it,
+the welcome screen with recent folders, the completion summary and the main
+window (menus, progress, footer buttons, status bar, config persistence). You
+can start it with `python -m image_swiper` or the installed `image-swiper`
+script and sort a folder end to end (284 tests, green on Python 3.11–3.13 in
+CI). Deck fly-in animation, background scanning/prefetch and the shortcut
+overlay are the remaining polish items. See the [roadmap](#roadmap) for what is
+next.
 
 ---
 
@@ -190,20 +193,25 @@ image-swiper --version      # once the CLI milestone lands
 1. **Launch** the app:
 
    ```bash
-   image-swiper                      # opens the folder picker
+   image-swiper                      # reopens the last folder, or the picker
    image-swiper ~/Pictures/unsorted  # skip the picker
    ```
 
-2. **Pick a folder.** ImageSwiper scans it for supported image files
-   (`.jpg`, `.jpeg`, `.png`, `.webp`, `.bmp`, `.gif`, `.tif`, `.tiff`).
+2. **Pick a folder.** On a first run ImageSwiper shows a welcome page with a big
+   *Select Folder* button and the five folders you opened last. It scans the
+   chosen folder for supported image files (`.jpg`, `.jpeg`, `.png`, `.webp`,
+   `.bmp`, `.gif`, `.tif`, `.tiff`).
 3. **Swipe.** Drag the photo with the mouse, flick it with a touchscreen, or
    press an arrow/WASD key. Release past roughly a third of the window width
-   (or press a key) to commit; release earlier and the card springs back.
+   (or press a key) to commit; release earlier and the card springs back. The
+   four footer buttons (*Bad*, *OK*, *Good*, *Great*) do the same for anyone who
+   prefers clicking.
 4. **Watch it move.** The file is moved into `Good/`, `Bad/`, `Great/` or `OK/`
-   inside the folder you opened. The next image slides in.
+   inside the folder you opened. The next image appears and the header counts
+   `Image 3 of 47`.
 5. **Undo** with <kbd>Ctrl</kbd>+<kbd>Z</kbd> if you misflicked.
 6. **Finish.** When the folder is drained, a summary shows how many images went
-   where, and lets you open the destination folders.
+   where, and offers to rescan the folder, pick another one, or quit.
 
 ImageSwiper **never deletes or overwrites** anything. Subfolders it creates look
 like this:
@@ -259,6 +267,10 @@ The file is written on first save (when the window closes). A minimal example:
 ```json
 {
   "last_folder": "/home/you/Pictures/to-sort",
+  "recent_folders": [
+    "/home/you/Pictures/to-sort",
+    "/home/you/Pictures/2024-06-trip"
+  ],
   "theme": "system",
   "version": 1,
   "window": { "height": 800, "width": 1200 }
@@ -266,8 +278,10 @@ The file is written on first save (when the window closes). A minimal example:
 ```
 
 `theme` is `system`, `light` or `dark`; `last_folder` is reopened at start-up and
-may be `null`. Unknown keys are ignored with a warning, so a file from a newer
-build still loads. The file is replaced atomically with mode `0600`.
+may be `null`. `recent_folders` holds at most five folders, newest first, and
+feeds the welcome page's shortcut list. Unknown keys are ignored with a warning,
+so a file from a newer build still loads. The file is replaced atomically with
+mode `0600`.
 
 Logs are written to
 `${XDG_DATA_HOME:-~/.local/share}/image-swiper/logs/image-swiper.log`, rotated at
@@ -288,10 +302,13 @@ image-swiper/
 │   ├── app.py                 # QApplication bootstrap, wiring, lifecycle
 │   ├── py.typed               # PEP 561 marker (type info ships with the wheel)
 │   ├── ui/                    # Qt-only layer (all PyQt6 imports live here)
-│   │   ├── main_window.py     # shell: menus, toolbar, status bar, session wiring
+│   │   ├── main_window.py     # shell: menus, status bar, three-page session wiring
+│   │   ├── welcome_screen.py  # "Select Folder" empty state + recent folders
+│   │   ├── completion_screen.py # per-category summary, restart/pick/quit
 │   │   ├── swipe_card.py      # one image: drag, rotation, badge, fly-out (gui)
 │   │   ├── swipe_widget.py    # stage: hosts the card, feeds images, forwards swipes
 │   │   ├── animator.py        # fly-in / stage fades, shared timing table
+│   │   ├── branding.py        # generated window icon and welcome logo
 │   │   └── workers.py         # QRunnable adapters: scan, preview decode, move
 │   ├── core/                  # toolkit-agnostic logic (no Qt imports)
 │   │   ├── image_loader.py    # folder scanning, validation, decode, prefetch
@@ -299,7 +316,7 @@ image-swiper/
 │   │   └── folder_manager.py  # category folders, validation, collision-free moves
 │   └── utils/                 # reusable helpers, no UI/core knowledge
 │       ├── file_ops.py        # collision-safe moves, reverse moves, path helpers
-│       ├── config.py          # JSON defaults/load/save, XDG paths
+│       ├── config.py          # JSON defaults/load/save, XDG paths, recent folders
 │       └── logging_setup.py   # rotating file logs + optional console handler
 ├── tests/                     # pytest suites mirroring src/ (pytest-qt for GUI)
 ├── docs/
@@ -329,9 +346,9 @@ imports with `ast` and fails on any Qt import below `ui/`. Details and rationale
 | --- | --- | --- |
 | **M0 — Scaffolding** | Layout, packaging, docs, module contracts, CI pipeline | ✅ done |
 | **M1 — Image pipeline** | `image_loader`, EXIF handling, prefetching, fixture tests | ✅ done |
-| **M2 — Swipe UI** | `swipe_card` (card, drag, badge, fly-out), `swipe_widget` stage, deck wiring, main window | 🟡 partial — the card is implemented |
+| **M2 — Swipe UI** | `swipe_card` (card, drag, badge, fly-out), `swipe_widget` stage, main window, welcome/summary pages | ✅ done — deck fly-in (`animator`) remains |
 | **M3 — Sorting** | `folder_manager`, `sorter`, `file_ops`, collision handling | ✅ done |
-| **M4 — Comfort** | Undo, config UI, summary screen, logging, error reporting | 🟡 partial — undo, config and logging done |
+| **M4 — Comfort** | Undo, config UI, summary screen, logging, error reporting | 🟡 partial — undo, config, logging, summary and error dialogs done; shortcut overlay and background workers remain |
 | **M5 — Distribution** | `.desktop` file, icons, AppImage/Flatpak, 1.0 | ⬜ planned |
 
 ---

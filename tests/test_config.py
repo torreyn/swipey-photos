@@ -12,6 +12,7 @@ import pytest
 
 from image_swiper.utils.config import (
     CONFIG_VERSION,
+    MAX_RECENT_FOLDERS,
     Config,
     ConfigError,
     ConfigValidationError,
@@ -24,6 +25,7 @@ from image_swiper.utils.config import (
     save_config,
     to_dict,
     validate_config,
+    with_recent_folder,
 )
 
 LOGGER_NAME = "image_swiper"
@@ -43,6 +45,7 @@ def test_default_config_uses_the_documented_values() -> None:
 
     assert config.version == CONFIG_VERSION
     assert config.last_folder is None
+    assert config.recent_folders == ()
     assert config.window == WindowConfig(width=1200, height=800)
     assert config.theme == "system"
 
@@ -88,6 +91,7 @@ def test_saved_file_contains_the_documented_keys(xdg_dirs: dict[str, Path]) -> N
     assert payload == {
         "version": CONFIG_VERSION,
         "last_folder": None,
+        "recent_folders": [],
         "window": {"width": 1200, "height": 800},
         "theme": "dark",
     }
@@ -238,3 +242,100 @@ def test_load_accepts_an_explicit_path(tmp_path: Path) -> None:
     target = _write_json(tmp_path / "custom.json", {"theme": "light"})
 
     assert load_config(target).theme == "light"
+
+
+# ----------------------------------------------------------------------
+# Recent folders
+# ----------------------------------------------------------------------
+
+
+def test_recent_folders_round_trip(tmp_path: Path) -> None:
+    """The welcome screen reads back exactly what was written."""
+    folders = (tmp_path / "one", tmp_path / "two")
+    target = tmp_path / "config.json"
+
+    save_config(Config(recent_folders=folders), target)
+
+    assert load_config(target).recent_folders == folders
+
+
+def test_recent_folders_are_trimmed_on_load(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A hand-edited file with too many entries still opens the app."""
+    folders = [str(tmp_path / f"folder{index}") for index in range(9)]
+    target = _write_json(tmp_path / "config.json", {"recent_folders": folders})
+
+    with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
+        loaded = load_config(target)
+
+    assert len(loaded.recent_folders) == MAX_RECENT_FOLDERS
+    assert loaded.recent_folders[0] == Path(folders[0])
+    assert any("recent folders" in record.getMessage() for record in caplog.records)
+
+
+def test_blank_and_duplicate_recent_folders_are_dropped(tmp_path: Path) -> None:
+    """Empty strings and repeats never reach the welcome screen."""
+    target = _write_json(
+        tmp_path / "config.json",
+        {"recent_folders": ["   ", str(tmp_path / "a"), str(tmp_path / "a")]},
+    )
+
+    assert load_config(target).recent_folders == (tmp_path / "a",)
+
+
+def test_recent_folders_must_be_a_list(tmp_path: Path) -> None:
+    """A string is not a list of folders."""
+    target = _write_json(tmp_path / "config.json", {"recent_folders": "not-a-list"})
+
+    with pytest.raises(ConfigValidationError, match="JSON array"):
+        load_config(target)
+
+
+def test_recent_folder_entries_must_be_strings(tmp_path: Path) -> None:
+    """Numbers cannot be paths."""
+    target = _write_json(tmp_path / "config.json", {"recent_folders": [42]})
+
+    with pytest.raises(ConfigValidationError, match="must be strings"):
+        load_config(target)
+
+
+def test_validation_rejects_too_many_recent_folders(tmp_path: Path) -> None:
+    """The cap is enforced on write as well as on read."""
+    too_many = tuple(tmp_path / f"folder{index}" for index in range(MAX_RECENT_FOLDERS + 1))
+
+    with pytest.raises(ConfigValidationError, match="at most"):
+        validate_config(Config(recent_folders=too_many))
+
+
+def test_with_recent_folder_promotes_and_de_duplicates(tmp_path: Path) -> None:
+    """Opening a folder makes it both the last and the newest entry."""
+    older = tmp_path / "older"
+    newest = tmp_path / "newest"
+    config = Config(last_folder=older, recent_folders=(older, tmp_path / "other"))
+
+    updated = with_recent_folder(config, newest)
+
+    assert updated.last_folder == newest
+    assert updated.recent_folders == (newest, older, tmp_path / "other")
+    assert config.recent_folders == (older, tmp_path / "other"), "input must not mutate"
+
+
+def test_with_recent_folder_keeps_the_list_bounded(tmp_path: Path) -> None:
+    """The list never grows past the documented limit."""
+    folders = tuple(tmp_path / f"folder{index}" for index in range(MAX_RECENT_FOLDERS))
+    config = Config(recent_folders=folders)
+
+    updated = with_recent_folder(config, tmp_path / "brand-new")
+
+    assert len(updated.recent_folders) == MAX_RECENT_FOLDERS
+    assert updated.recent_folders[0] == tmp_path / "brand-new"
+    assert folders[-1] not in updated.recent_folders
+
+
+def test_with_recent_folder_expands_the_home_directory() -> None:
+    """``~`` in a CLI argument still produces an absolute path."""
+    updated = with_recent_folder(default_config(), "~/Pictures")
+
+    assert updated.last_folder == Path.home() / "Pictures"
+    assert updated.recent_folders == (Path.home() / "Pictures",)

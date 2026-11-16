@@ -16,6 +16,9 @@ Fixtures
     ``isolated_logging``
         Routes the ``image_swiper`` logger into ``tmp_path/logs`` and detaches
         the handlers again afterwards.
+    ``fake_file_dialog``
+        Replaces ``QFileDialog`` in the UI modules with
+        :class:`helpers.FakeFileDialog`, so nothing opens a modal dialog.
 
 Conventions
     * Tests never touch the developer's real Pictures folder or real config:
@@ -35,6 +38,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from helpers import FakeFileDialog
 from image_swiper.utils.config import Config, WindowConfig
 from image_swiper.utils.logging_setup import LOGGER_NAME, setup_logging
 
@@ -125,3 +129,39 @@ def isolated_logging(tmp_path: Path) -> Iterator[Path]:
             logger.removeHandler(handler)
             handler.close()
         logger.setLevel(logging.WARNING)
+
+
+@pytest.fixture
+def fake_file_dialog(monkeypatch: pytest.MonkeyPatch) -> type[FakeFileDialog]:
+    """Answer every folder picker with ``FakeFileDialog.result``.
+
+    The module globals are patched rather than the PyQt6 class, because SIP
+    types reject attribute assignment.
+    """
+    from image_swiper.ui import main_window, welcome_screen
+
+    FakeFileDialog.result = ""
+    FakeFileDialog.calls = []
+    for module in (welcome_screen, main_window):
+        monkeypatch.setattr(module, "QFileDialog", FakeFileDialog)
+    return FakeFileDialog
+
+
+@pytest.fixture
+def dialogs(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str, str]]:
+    """Capture modal messages instead of showing them.
+
+    Returns:
+        A list that receives ``(kind, title, message)`` tuples for every call
+        to ``MainWindow._report_info``/``_report_warning``/``_report_error``.
+    """
+    from image_swiper.ui.main_window import MainWindow as Window
+
+    recorded: list[tuple[str, str, str]] = []
+    for suffix in ("info", "warning", "error"):
+
+        def handler(_window: Window, title: str, message: str, _kind: str = suffix) -> None:
+            recorded.append((_kind, title, message))
+
+        monkeypatch.setattr(Window, f"_report_{suffix}", handler)
+    return recorded

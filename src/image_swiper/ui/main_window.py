@@ -1,45 +1,785 @@
 """Main application window: the shell that ties the UI to the core layer.
 
 Responsibility
-    Provide the frame around the image card and act as the *presenter* of a
-    sorting session. ``MainWindow`` owns the session-level state (current
-    folder, remaining images, progress counters) and translates user intent
-    into core-layer calls. It contains layout and wiring only — no image
-    decoding, no file moves, no animation maths.
+    Present one sorting session and act as its *presenter*. ``MainWindow`` owns
+    the session-level state (current folder, progress counters, images that were
+    skipped) and translates user intent into core-layer calls. It contains
+    layout and wiring only: no image decoding rules, no file moves and no
+    animation maths of its own.
 
 Composition
-    * ``QMainWindow`` with a header (folder path, "12 of 340" progress),
-      a :class:`~image_swiper.ui.swipe_widget.SwipeWidget` in the centre,
-      and a status bar (last action, error messages, undo hint).
-    * A toolbar/menu with *Open folder*, *Undo*, *Rescan*, *Fullscreen*,
-      *Shortcuts* and *Quit*.
-    * An empty state ("Choose a folder to start") and a completion state
-      ("All 340 images sorted" + per-destination counts).
+    * A ``QStackedWidget`` with three pages: :class:`WelcomeScreen`, the swipe
+      stage (:class:`SwipeWidget`) and :class:`CompletionScreen`.
+    * Header with ``"Image 3 of 47"`` and the folder path; footer with four
+      buttons (Bad, OK, Good, Great) for users who prefer clicking to dragging.
+    * Menus: *File* → Open Folder (Ctrl+O), Undo Last (Ctrl+Z), Quit (Ctrl+Q);
+      *Help* → About. The status bar shows the source folder on the left and
+      live per-category counts plus the remaining images on the right.
+    * Window-level ``QAction`` shortcuts for the four categories (arrows and
+      WASD) and Space to skip, so they work no matter which child has focus.
 
-Planned public API
-    class MainWindow(QMainWindow):
-        open_folder_requested: pyqtSignal()      # user asked for the picker
-        sort_requested: pyqtSignal(str)          # card wants to commit; a category
-        undo_requested: pyqtSignal()
-        def show_image(image: Image.Image, original_size: tuple[int, int]) -> None
-        def show_empty_state(message: str) -> None
-        def show_error(message: str, detail: str = "") -> None
-        def update_progress(done: int, total: int) -> None
+Session flow
+    ``open_folder()`` → ``Sorter`` (stat-only scan) → decode the current preview
+    → ``SwipeWidget.show_image()`` → the card emits ``swipe_committed`` →
+    ``Sorter.categorize()`` → next preview … → ``Sorter.finished`` →
+    ``CompletionScreen``. Undo restores the file and returns to the stage.
 
-Keyboard handling
-    Maps ←/A, →/D, ↑/W, ↓/S to the four categories (`Good`, `Bad`, `Great`,
-    `OK`), Ctrl+Z to undo,
-    Space to skip, Ctrl+O to open, F5/Ctrl+R to rescan, F11 to fullscreen,
-    F1/? to the shortcut overlay, Ctrl+Q to quit. Bindings are ``QAction``/
-    ``QShortcut`` based so they work regardless of which child widget has focus;
-    WASD is ignored while a text input has focus.
+Error handling
+    Every failure is logged and funnelled through :meth:`_report_info`,
+    :meth:`_report_warning` and :meth:`_report_error` — the only methods that
+    open a ``QMessageBox``, which is also what makes them replaceable in
+    offscreen tests. A failed move leaves the image in the queue and the card
+    usable; an undecodable image is reported once and skipped.
 
 Boundary rules
-    * Holds references to core objects but never performs I/O itself.
-    * Long operations are dispatched to :mod:`image_swiper.ui.workers`; the
-      window reacts to their signals on the GUI thread.
-    * Persists window size and last folder through
-      :mod:`image_swiper.utils.config` on close.
-
-Not implemented yet (milestones M2 and M4).
+    * The window owns core objects but performs no file I/O itself: scanning,
+      decoding and moving all go through :mod:`image_swiper.core`.
+    * Previews are decoded on the GUI thread, one image at a time; the scan is
+      stat-only, so opening a 5 000-file folder stays fast. Moving decode onto
+      :mod:`image_swiper.ui.workers` is a later optimisation.
+    * Window size, the last folder and the recent folders are persisted through
+      :mod:`image_swiper.utils.config` when a folder is opened and on close.
 """
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import replace
+from pathlib import Path
+
+from PIL import Image
+from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtGui import QAction, QCloseEvent, QFont, QImage, QKeySequence, QPixmap
+from PyQt6.QtWidgets import (
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMenu,
+    QMenuBar,
+    QMessageBox,
+    QPushButton,
+    QSizePolicy,
+    QStackedWidget,
+    QStatusBar,
+    QVBoxLayout,
+    QWidget,
+)
+
+from .. import __version__
+from ..core.folder_manager import (
+    CATEGORIES,
+    CategoryError,
+    FolderManagerError,
+    SourceFolderError,
+)
+from ..core.image_loader import ImageLoader, ImageLoaderError
+from ..core.sorter import MissingImageError, NoCurrentImageError, Sorter, UndoError
+from ..utils.config import (
+    Config,
+    ConfigError,
+    WindowConfig,
+    default_config,
+    save_config,
+    with_recent_folder,
+)
+from ..utils.file_ops import FileOperationError
+from ..utils.logging_setup import get_logger
+from .branding import APP_DISPLAY_NAME, TAGLINE
+from .completion_screen import CompletionScreen
+from .swipe_card import CATEGORY_COLORS
+from .swipe_widget import SwipeWidget
+from .welcome_screen import WelcomeScreen
+
+LOGGER = get_logger(__name__)
+
+PAGE_WELCOME = 0
+"""Stack index of the empty state / folder picker."""
+
+PAGE_STAGE = 1
+"""Stack index of the swipe stage."""
+
+PAGE_COMPLETION = 2
+"""Stack index of the session summary."""
+
+_PAGE_NAMES: dict[int, str] = {
+    PAGE_WELCOME: "welcome",
+    PAGE_STAGE: "stage",
+    PAGE_COMPLETION: "completion",
+}
+
+FOOTER_ORDER: tuple[str, ...] = ("Bad", "OK", "Good", "Great")
+"""Button order in the footer: the two "cheap" decisions first, Great last."""
+
+CATEGORY_SHORTCUTS: dict[str, tuple[QKeySequence, QKeySequence]] = {
+    "Bad": (QKeySequence(Qt.Key.Key_Left), QKeySequence("A")),
+    "OK": (QKeySequence(Qt.Key.Key_Down), QKeySequence("S")),
+    "Good": (QKeySequence(Qt.Key.Key_Right), QKeySequence("D")),
+    "Great": (QKeySequence(Qt.Key.Key_Up), QKeySequence("W")),
+}
+"""Keyboard equivalents per category, matching the README shortcut table."""
+
+CATEGORY_HINTS: dict[str, str] = {
+    "Bad": "← or A",
+    "OK": "↓ or S",
+    "Good": "→ or D",
+    "Great": "↑ or W",
+}
+"""Short human hints reused in button tooltips."""
+
+SorterFactory = Callable[[Path], Sorter]
+"""Builds a session sorter for a folder; injectable for tests and future modes."""
+
+
+def default_sorter_factory(folder: Path) -> Sorter:
+    """Return a :class:`Sorter` for *folder* with a stat-only scan.
+
+    ``validate=False`` keeps folder opening fast on large directories: the
+    expensive part of validation is decoding every file, which the window does
+    lazily anyway when it shows a preview. A file that turns out to be corrupt
+    is reported and skipped at that point, not during the scan.
+
+    Args:
+        folder: Source folder chosen by the user.
+
+    Returns:
+        A sorter whose loader has not opened any image yet.
+
+    Raises:
+        SourceFolderError: The folder is missing or not a directory.
+        ImageLoaderError: The folder cannot be read.
+        FolderManagerError: The category folders cannot be created.
+    """
+    loader = ImageLoader(folder, validate=False)
+    return Sorter(folder, image_loader=loader)
+
+
+def qimage_from_pil(image: Image.Image) -> QImage:
+    """Convert a Pillow image into a detached :class:`QImage`.
+
+    Args:
+        image: The decoded preview returned by ``ImageLoader.load_preview``.
+
+    Returns:
+        An RGB888 or RGBA8888 ``QImage`` that owns its pixels, so the temporary
+        buffer can be garbage-collected after the call.
+    """
+    if image.mode == "RGBA":
+        rgba = image.tobytes("raw", "RGBA")
+        width = image.width
+        buffer = QImage(rgba, width, image.height, 4 * width, QImage.Format.Format_RGBA8888)
+        return buffer.copy()
+    rgb = image.convert("RGB")
+    width = rgb.width
+    buffer = QImage(
+        rgb.tobytes("raw", "RGB"),
+        width,
+        rgb.height,
+        3 * width,
+        QImage.Format.Format_RGB888,
+    )
+    return buffer.copy()
+
+
+def pixmap_from_pil(image: Image.Image) -> QPixmap:
+    """Return *image* as a :class:`QPixmap` ready for the card (GUI thread only)."""
+    return QPixmap.fromImage(qimage_from_pil(image))
+
+
+class MainWindow(QMainWindow):
+    """Sorting-session shell around the swipe stage.
+
+    Args:
+        parent: Optional Qt parent.
+        config: Configuration to start from; defaults are used when ``None``.
+        config_path: File used to persist the configuration. ``None`` uses the
+            XDG default; tests pass a ``tmp_path`` file instead.
+        sorter_factory: Callable building a :class:`Sorter` per folder; inject a
+            fake to exercise the wiring without touching the real core.
+    """
+
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        config: Config | None = None,
+        config_path: Path | None = None,
+        sorter_factory: SorterFactory = default_sorter_factory,
+    ) -> None:
+        """Build the window, its menus, its shortcuts and the welcome page."""
+        super().__init__(parent)
+        self._config = config if config is not None else default_config()
+        self._config_path = config_path
+        self._sorter_factory: SorterFactory = sorter_factory
+        self._sorter: Sorter | None = None
+        self._busy = False
+        self._skipped = 0
+        self._category_actions: dict[str, QAction] = {}
+        self._category_buttons: dict[str, QPushButton] = {}
+
+        self._build_ui()
+        self._build_menus()
+        self._build_shortcuts()
+        self._apply_config()
+        self._show_page(PAGE_WELCOME)
+
+    # ------------------------------------------------------------------
+    # Construction
+    # ------------------------------------------------------------------
+
+    def _build_ui(self) -> None:
+        """Create the page stack, the stage page and the status bar widgets."""
+        self._pages = QStackedWidget(self)
+        self._pages.setObjectName("main_pages")
+
+        self._welcome = WelcomeScreen(self._pages, recent_folders=self._config.recent_folders)
+        self._welcome.folder_selected.connect(self._on_folder_chosen)
+
+        self._swipe = SwipeWidget(self._pages)
+        self._swipe.swipe_committed.connect(self._on_swipe_committed)
+
+        self._completion = CompletionScreen(self._pages)
+        self._completion.open_source_requested.connect(self._on_open_source)
+        self._completion.pick_folder_requested.connect(self._choose_folder)
+        self._completion.quit_requested.connect(self.close)
+
+        self._pages.addWidget(self._welcome)
+        self._pages.addWidget(self._build_stage_page())
+        self._pages.addWidget(self._completion)
+        self.setCentralWidget(self._pages)
+
+        self._status_folder = QLabel("", self)
+        self._status_folder.setObjectName("status_folder")
+        self._status_folder.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self._status_counts = QLabel("", self)
+        self._status_counts.setObjectName("status_counts")
+        self._status_bar = QStatusBar(self)
+        self._status_bar.setObjectName("main_status_bar")
+        self.setStatusBar(self._status_bar)
+        self._status_bar.addWidget(self._status_folder, 1)
+        self._status_bar.addPermanentWidget(self._status_counts)
+
+    def _build_stage_page(self) -> QWidget:
+        """Return the page that composes the progress header, stage and footer."""
+        page = QWidget(self._pages)
+        page.setObjectName("stage_page")
+
+        self._progress_label = QLabel("", page)
+        self._progress_label.setObjectName("progress_label")
+        progress_font = QFont(self._progress_label.font())
+        progress_font.setBold(True)
+        progress_font.setPointSize(max(progress_font.pointSize(), 10) + 2)
+        self._progress_label.setFont(progress_font)
+
+        self._folder_label = QLabel("", page)
+        self._folder_label.setObjectName("stage_folder_label")
+        self._folder_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._folder_label.setStyleSheet("color: palette(mid);")
+        self._folder_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+
+        header = QHBoxLayout()
+        header.setContentsMargins(16, 10, 16, 0)
+        header.addWidget(self._progress_label)
+        header.addSpacing(12)
+        header.addWidget(self._folder_label, 1)
+
+        footer = QHBoxLayout()
+        footer.setContentsMargins(16, 8, 16, 12)
+        footer.setSpacing(8)
+        footer.addStretch(1)
+        for category in FOOTER_ORDER:
+            button = self._build_category_button(category, page)
+            self._category_buttons[category] = button
+            footer.addWidget(button)
+        footer.addStretch(1)
+
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addLayout(header)
+        layout.addWidget(self._swipe, 1)
+        layout.addLayout(footer)
+        return page
+
+    def _build_category_button(self, category: str, parent: QWidget) -> QPushButton:
+        """Return a footer button that commits *category* when clicked."""
+        colour = CATEGORY_COLORS[category]
+        button = QPushButton(category, parent)
+        button.setObjectName(f"category_button_{category}")
+        button.setMinimumSize(120, 44)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setToolTip(f"Move the current image to {category}/ ({CATEGORY_HINTS[category]})")
+        button.setStyleSheet(
+            "QPushButton {"
+            f"background-color: {colour}; color: #101010; border: none;"
+            " border-radius: 10px; padding: 10px 20px; font-weight: 600; }"
+            "QPushButton:disabled { background-color: palette(mid); color: palette(dark); }"
+            "QPushButton:pressed { background-color: palette(dark); }"
+        )
+        button.clicked.connect(lambda _checked=False, name=category: self._request_category(name))
+        return button
+
+    def _build_menus(self) -> None:
+        """Create the File and Help menus with their standard shortcuts."""
+        self._menu_bar = QMenuBar(self)
+        self.setMenuBar(self._menu_bar)
+
+        file_menu = QMenu("&File", self._menu_bar)
+        self._menu_bar.addMenu(file_menu)
+
+        self._open_action = QAction("&Open Folder…", self)
+        self._open_action.setObjectName("action_open_folder")
+        self._open_action.setShortcut(QKeySequence.StandardKey.Open)
+        self._open_action.setStatusTip("Choose the folder of photos to sort")
+        self._open_action.triggered.connect(self._choose_folder)
+        file_menu.addAction(self._open_action)
+
+        self._undo_action = QAction("&Undo Last", self)
+        self._undo_action.setObjectName("action_undo")
+        self._undo_action.setShortcut(QKeySequence.StandardKey.Undo)
+        self._undo_action.setStatusTip("Move the most recently sorted image back")
+        self._undo_action.setEnabled(False)
+        self._undo_action.triggered.connect(self._on_undo)
+        file_menu.addAction(self._undo_action)
+
+        file_menu.addSeparator()
+        self._quit_action = QAction("&Quit", self)
+        self._quit_action.setObjectName("action_quit")
+        self._quit_action.setShortcut(QKeySequence.StandardKey.Quit)
+        self._quit_action.setStatusTip("Close ImageSwiper (window state is saved)")
+        self._quit_action.triggered.connect(self.close)
+        file_menu.addAction(self._quit_action)
+
+        help_menu = QMenu("&Help", self._menu_bar)
+        self._menu_bar.addMenu(help_menu)
+        self._about_action = QAction(f"&About {APP_DISPLAY_NAME}", self)
+        self._about_action.setObjectName("action_about")
+        self._about_action.setStatusTip("Version and a short description")
+        self._about_action.triggered.connect(self._show_about)
+        help_menu.addAction(self._about_action)
+
+    def _build_shortcuts(self) -> None:
+        """Install the category and skip actions so shortcuts work window-wide.
+
+        The four category actions use ``WindowShortcut`` because they must work
+        whichever child has focus. Space is bound on the card instead
+        (``WidgetShortcut``): a window-wide Space would otherwise fire while a
+        footer button has focus, and pressing Space on a focused button is
+        supposed to press that button.
+        """
+        for category, sequences in CATEGORY_SHORTCUTS.items():
+            action = QAction(category, self)
+            action.setObjectName(f"action_category_{category}")
+            action.setShortcuts(list(sequences))
+            action.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
+            action.setStatusTip(f"Send the current image to {category}/")
+            action.setEnabled(False)
+            action.triggered.connect(
+                lambda _checked=False, name=category: self._request_category(name)
+            )
+            self.addAction(action)
+            self._category_actions[category] = action
+
+        self._skip_action = QAction("Skip", self)
+        self._skip_action.setObjectName("action_skip")
+        self._skip_action.setShortcut(QKeySequence(Qt.Key.Key_Space))
+        self._skip_action.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        self._skip_action.setStatusTip("Leave this image in the folder and show the next one")
+        self._skip_action.setEnabled(False)
+        self._skip_action.triggered.connect(self._on_skip)
+        self._swipe.card.addAction(self._skip_action)
+
+    def _apply_config(self) -> None:
+        """Apply the remembered window size and the initial title."""
+        self.setMinimumSize(QSize(640, 480))
+        self.resize(self._config.window.width, self._config.window.height)
+        self.setWindowTitle(APP_DISPLAY_NAME)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    @property
+    def config(self) -> Config:
+        """The configuration currently in memory (updated as folders are used)."""
+        return self._config
+
+    @property
+    def sorter(self) -> Sorter | None:
+        """The active session sorter, or ``None`` before a folder was opened."""
+        return self._sorter
+
+    @property
+    def welcome_screen(self) -> WelcomeScreen:
+        """The page shown when no folder is open."""
+        return self._welcome
+
+    @property
+    def completion_screen(self) -> CompletionScreen:
+        """The page shown once the deck is empty."""
+        return self._completion
+
+    @property
+    def swipe_widget(self) -> SwipeWidget:
+        """The stage that hosts the swipe card."""
+        return self._swipe
+
+    @property
+    def category_actions(self) -> dict[str, QAction]:
+        """The four keyboard actions, keyed by canonical category name."""
+        return dict(self._category_actions)
+
+    @property
+    def category_buttons(self) -> dict[str, QPushButton]:
+        """The four footer buttons, keyed by canonical category name."""
+        return dict(self._category_buttons)
+
+    @property
+    def progress_label(self) -> QLabel:
+        """The "Image 3 of 47" label in the stage header."""
+        return self._progress_label
+
+    @property
+    def status_counts_label(self) -> QLabel:
+        """The permanent status-bar label with the live per-category counts."""
+        return self._status_counts
+
+    @property
+    def current_page(self) -> str:
+        """Name of the visible page: ``"welcome"``, ``"stage"`` or ``"completion"``."""
+        return _PAGE_NAMES.get(self._pages.currentIndex(), "unknown")
+
+    def open_folder(self, folder: str | Path) -> bool:
+        """Start a sorting session for *folder*.
+
+        Args:
+            folder: Folder holding the images to sort. Missing, unreadable and
+                image-less folders are reported to the user and rejected.
+
+        Returns:
+            ``True`` when the session started and the first preview is shown;
+            ``False`` when the folder was rejected, in which case the window
+            stays on the page it was showing.
+        """
+        target = Path(folder).expanduser()
+        try:
+            sorter = self._sorter_factory(target)
+        except (SourceFolderError, ImageLoaderError, FolderManagerError, OSError) as exc:
+            LOGGER.warning("cannot open %s: %s", target, exc)
+            self._report_error("Could not open folder", f"{target}\n\n{exc}")
+            return False
+
+        if sorter.total == 0:
+            LOGGER.info("no supported images in %s", target)
+            self._report_info(
+                "No images found",
+                f"{target} does not contain any supported image files.\n\n"
+                "Supported formats: JPEG, PNG, GIF, BMP, WebP and TIFF.",
+            )
+            return False
+
+        self._sorter = sorter
+        self._skipped = 0
+        self._busy = False
+        self._remember_folder(sorter.source_folder)
+        self.setWindowTitle(f"{APP_DISPLAY_NAME} — {sorter.source_folder.name}")
+        self._show_page(PAGE_STAGE)
+        self._load_current_image()
+        LOGGER.info("session started for %s with %d image(s)", sorter.source_folder, sorter.total)
+        return True
+
+    def restore_last_session(self) -> bool:
+        """Reopen the folder remembered in the configuration, if it still exists.
+
+        Returns:
+            ``True`` when a session started, ``False`` when there is no
+            remembered folder or it is no longer usable (the welcome page then
+            stays visible).
+        """
+        folder = self._config.last_folder
+        if folder is None:
+            LOGGER.debug("no remembered folder; showing the welcome page")
+            return False
+        if not folder.is_dir():
+            LOGGER.warning("remembered folder is gone: %s", folder)
+            self.show_status_message(f"Last folder is no longer available: {folder}", 8000)
+            return False
+        return self.open_folder(folder)
+
+    def save_state(self) -> None:
+        """Persist window size, the current folder and the recents list.
+
+        Configuration problems are logged and shown in the status bar instead of
+        raising: a read-only home directory must not block closing the app.
+        """
+        size = self.size()
+        self._config = replace(
+            self._config,
+            window=WindowConfig(width=max(size.width(), 1), height=max(size.height(), 1)),
+        )
+        if self._sorter is not None:
+            self._config = with_recent_folder(self._config, self._sorter.source_folder)
+        self._save_config()
+
+    def show_status_message(self, message: str, timeout_ms: int = 5000) -> None:
+        """Show *message* in the status bar for *timeout_ms* milliseconds."""
+        self._status_bar.showMessage(message, timeout_ms)
+
+    def closeEvent(self, event: QCloseEvent | None) -> None:
+        """Save the state before the window closes."""
+        self.save_state()
+        super().closeEvent(event)
+
+    # ------------------------------------------------------------------
+    # Session flow
+    # ------------------------------------------------------------------
+
+    def _load_current_image(self) -> None:
+        """Show the sorter's current image, skipping files that cannot be decoded.
+
+        A preview that Pillow rejects is reported and passed over with
+        ``Sorter.advance()``, which leaves the file where it is: the user can
+        still deal with it outside the app. When no image is left the summary
+        page replaces the stage.
+        """
+        sorter = self._sorter
+        if sorter is None:
+            self._show_page(PAGE_WELCOME)
+            return
+
+        while True:
+            path = sorter.current_image()
+            if path is None:
+                self._show_completion()
+                return
+            try:
+                image, original_size = sorter.image_loader.load_preview(path)
+            except ImageLoaderError as exc:
+                LOGGER.warning("skipping undecodable image %s: %s", path, exc)
+                self._skipped += 1
+                self._report_warning(
+                    "Image skipped",
+                    f"{path.name} could not be read and was skipped.\n\n{exc}",
+                )
+                sorter.advance()
+                continue
+            pixmap = pixmap_from_pil(image)
+            caption = f"{path.name} - {original_size[0]} x {original_size[1]}"
+            self._swipe.show_image(pixmap, caption=caption)
+            self._swipe.set_interactive(True)
+            self._refresh_status()
+            return
+
+    def _on_swipe_committed(self, category: str) -> None:
+        """Move the current image into *category* and deal the next one.
+
+        A failed move is reported and leaves the image queued and visible again,
+        so the same file can be retried without anything having been mutated.
+        """
+        sorter = self._sorter
+        if sorter is None or self._busy:
+            return
+
+        self._busy = True
+        self._swipe.set_interactive(False)
+        self._refresh_actions()
+        try:
+            record = sorter.categorize(category)
+        except MissingImageError as exc:
+            LOGGER.warning("current image vanished: %s", exc)
+            self._report_warning(
+                "Image disappeared",
+                f"{exc}\n\nThe image was dropped from the queue.",
+            )
+        except (
+            NoCurrentImageError,
+            CategoryError,
+            FolderManagerError,
+            FileOperationError,
+        ) as exc:
+            LOGGER.error("could not move the current image to %s: %s", category, exc)
+            self._report_error("Could not move image", f"{exc}\n\nThe image stays in the queue.")
+        else:
+            self.show_status_message(f"Moved {record.source.name} → {record.category}/", 3000)
+        finally:
+            self._busy = False
+            self._load_current_image()
+
+    def _on_undo(self) -> None:
+        """Restore the most recently sorted image and show it again."""
+        sorter = self._sorter
+        if sorter is None or self._busy:
+            return
+        try:
+            record = sorter.undo()
+        except UndoError as exc:
+            LOGGER.warning("undo failed: %s", exc)
+            self._report_warning("Could not undo", str(exc))
+            return
+        if record is None:
+            self.show_status_message("Nothing to undo")
+            return
+        self.show_status_message(f"Restored {record.filename} from {record.category}/")
+        self._show_page(PAGE_STAGE)
+        self._load_current_image()
+
+    def _on_skip(self) -> None:
+        """Leave the current image in place and show the next one."""
+        sorter = self._sorter
+        if sorter is None or not self._can_decide():
+            return
+        current = sorter.current_image()
+        if current is None:
+            return
+        sorter.advance()
+        self.show_status_message(f"Skipped {current.name}; it stays in the folder", 3000)
+        self._load_current_image()
+
+    def _show_completion(self) -> None:
+        """Swap in the summary page for the finished session."""
+        sorter = self._sorter
+        counts = {str(name): count for name, count in sorter.counts.items()} if sorter else {}
+        source = sorter.source_folder if sorter is not None else None
+        self._swipe.clear()
+        self._completion.set_summary(counts, source_folder=source, skipped=self._skipped)
+        self._show_page(PAGE_COMPLETION)
+        LOGGER.info("session finished: %s", counts)
+
+    # ------------------------------------------------------------------
+    # State refreshers
+    # ------------------------------------------------------------------
+
+    def _show_page(self, index: int) -> None:
+        """Show the page at stack position *index* and refresh the chrome."""
+        self._pages.setCurrentIndex(index)
+        self._refresh_status()
+
+    def _can_decide(self) -> bool:
+        """Return ``True`` when a category decision may be started right now."""
+        return (
+            self._pages.currentIndex() == PAGE_STAGE
+            and not self._busy
+            and self._sorter is not None
+            and not self._sorter.finished
+        )
+
+    def _refresh_status(self) -> None:
+        """Update the header, status bar and the enabled state of all actions.
+
+        ``"N left"`` is the number of images that are *not yet sorted*, so it
+        does not drop when the user skips one: a skipped file stays in the
+        folder and is offered again next session.
+        """
+        sorter = self._sorter
+        counts = sorter.counts if sorter is not None else {}
+        parts = [f"{category} {counts.get(category, 0)}" for category in CATEGORIES]
+        if sorter is not None:
+            unsorted = sorter.total - sum(counts.values())
+            parts.append(f"{unsorted} left")
+        self._status_counts.setText("  ·  ".join(parts))
+        self._status_folder.setText(str(sorter.source_folder) if sorter is not None else "")
+        self._folder_label.setText(str(sorter.source_folder) if sorter is not None else "")
+        self._refresh_progress()
+        self._refresh_actions()
+
+    def _refresh_progress(self) -> None:
+        """Show ``"Image 3 of 47"`` for the current deck position."""
+        sorter = self._sorter
+        if sorter is None or sorter.finished or self._pages.currentIndex() != PAGE_STAGE:
+            self._progress_label.setText("")
+            return
+        seen = sorter.total - sorter.remaining_count
+        self._progress_label.setText(f"Image {seen + 1} of {sorter.total}")
+
+    def _refresh_actions(self) -> None:
+        """Enable the category/skip actions and footer buttons only when usable."""
+        can_decide = self._can_decide()
+        for action in self._category_actions.values():
+            action.setEnabled(can_decide)
+        self._skip_action.setEnabled(can_decide)
+        for button in self._category_buttons.values():
+            button.setEnabled(can_decide)
+        self._undo_action.setEnabled(
+            self._sorter is not None and bool(self._sorter.history) and not self._busy
+        )
+
+    # ------------------------------------------------------------------
+    # User intent
+    # ------------------------------------------------------------------
+
+    def _request_category(self, category: str) -> None:
+        """Commit *category* through the card so it flies out like a drag."""
+        if not self._can_decide():
+            return
+        self._swipe.trigger_swipe(category)
+
+    def _on_folder_chosen(self, folder: str) -> None:
+        """Open *folder* after the welcome screen reported a selection."""
+        self.open_folder(folder)
+
+    def _choose_folder(self) -> None:
+        """Ask for a folder with ``QFileDialog`` and open it when chosen."""
+        if self._sorter is not None:
+            start = str(self._sorter.source_folder)
+        elif self._config.last_folder is not None:
+            start = str(self._config.last_folder)
+        else:
+            start = str(Path.home())
+        chosen = QFileDialog.getExistingDirectory(
+            self,
+            "Choose a folder of photos",
+            start,
+            QFileDialog.Option.ShowDirsOnly | QFileDialog.Option.DontResolveSymlinks,
+        )
+        if chosen:
+            self.open_folder(chosen)
+
+    def _on_open_source(self) -> None:
+        """Rescan the folder of the finished session."""
+        sorter = self._sorter
+        if sorter is None:
+            self._show_page(PAGE_WELCOME)
+            return
+        self.open_folder(sorter.source_folder)
+
+    def _remember_folder(self, folder: Path) -> None:
+        """Record *folder* as the most recent one and persist the config."""
+        self._config = with_recent_folder(self._config, folder)
+        self._welcome.set_recent_folders(self._config.recent_folders)
+        self._save_config()
+
+    def _save_config(self) -> None:
+        """Write the configuration, reporting failures without raising."""
+        try:
+            save_config(self._config, self._config_path)
+        except ConfigError as exc:
+            LOGGER.warning("could not save configuration: %s", exc)
+            self.show_status_message(f"Could not save settings: {exc}", 8000)
+
+    def _show_about(self) -> None:
+        """Show the About box with the version and a one-line description."""
+        QMessageBox.about(
+            self,
+            f"About {APP_DISPLAY_NAME}",
+            f"<h3>{APP_DISPLAY_NAME} {__version__}</h3>"
+            f"<p>{TAGLINE}</p>"
+            "<p>Sort a folder of photos into Good, Bad, Great and OK subfolders by "
+            "swiping or pressing a key. Files are moved, never overwritten and "
+            "never deleted.</p>",
+        )
+
+    # ------------------------------------------------------------------
+    # Dialogs (replaceable in tests)
+    # ------------------------------------------------------------------
+
+    def _report_info(self, title: str, message: str) -> None:
+        """Show an informational message box; tests replace this method."""
+        QMessageBox.information(self, title, message)
+
+    def _report_warning(self, title: str, message: str) -> None:
+        """Show a warning message box; tests replace this method."""
+        QMessageBox.warning(self, title, message)
+
+    def _report_error(self, title: str, message: str) -> None:
+        """Show a critical message box; tests replace this method."""
+        QMessageBox.critical(self, title, message)

@@ -1,0 +1,626 @@
+"""Tests for the main window (``ui/main_window.py``).
+
+Coverage
+    * the three-page flow: welcome → stage → summary, and back via undo/restart;
+    * opening folders: rejected (missing, empty), remembered, recent list
+      updated, configuration persisted;
+    * every decision path: footer buttons, keyboard actions, the card's
+      ``swipe_committed``, skip, and the guard against a second decision while a
+      move is in flight;
+    * error paths: an undecodable image is reported and skipped, a failed move
+      keeps the image queued, a vanished image is dropped with a warning;
+    * the live progress label and the status-bar counters.
+
+Conventions
+    * The window is always built with an explicit ``config_path`` under
+      ``tmp_path`` and the ``xdg_dirs`` fixture, so no real config is touched.
+    * Modal dialogs never open: the ``dialogs`` fixture replaces the three
+      ``_report_*`` helpers and records what the user would have seen.
+    * Tests wait with ``qtbot.waitUntil`` on observable state (sorter counters,
+      recorded dialogs) instead of sleeping through the 250 ms fly-out.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import pytest
+from PIL import Image
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QAction
+from PyQt6.QtWidgets import QWidget
+
+from helpers import FakeFileDialog
+from image_swiper.core.folder_manager import CATEGORIES
+from image_swiper.core.sorter import Sorter
+from image_swiper.ui.main_window import MainWindow, default_sorter_factory, qimage_from_pil
+from image_swiper.utils.config import Config, WindowConfig, load_config
+from image_swiper.utils.file_ops import FileOperationError
+
+if TYPE_CHECKING:
+    from pytestqt.qtbot import QtBot
+
+pytestmark = pytest.mark.gui
+
+
+@pytest.fixture
+def window(qtbot: QtBot, tmp_path: Path, xdg_dirs: dict[str, Path]) -> Callable[..., MainWindow]:
+    """Return a factory that builds a shown window persisting into ``tmp_path``."""
+
+    def factory(config: Config | None = None) -> MainWindow:
+        created = MainWindow(
+            config=Config() if config is None else config,
+            config_path=tmp_path / "config.json",
+        )
+        qtbot.addWidget(created)
+        created.show()
+        return created
+
+    return factory
+
+
+def commit(qtbot: QtBot, window: MainWindow, category: str) -> None:
+    """Trigger *category* and wait until the move or the summary completed."""
+    sorter = window.sorter
+    assert sorter is not None, "open a folder before committing"
+    before = sum(sorter.counts.values())
+    window.category_actions[category].trigger()
+    qtbot.waitUntil(
+        lambda: sorter.finished or sum(sorter.counts.values()) > before,
+        timeout=5000,
+    )
+
+
+def wait_for_dialog(qtbot: QtBot, dialogs: list[tuple[str, str, str]]) -> None:
+    """Wait until the window reported something to the user."""
+    qtbot.waitUntil(lambda: bool(dialogs), timeout=5000)
+
+
+# ----------------------------------------------------------------------
+# Startup, folders and persistence
+# ----------------------------------------------------------------------
+
+
+def test_starts_on_the_welcome_page(window: Callable[..., MainWindow]) -> None:
+    """With no folder configured the app waits on the select-folder page."""
+    created = window()
+
+    assert created.current_page == "welcome"
+    assert created.sorter is None
+    assert created.progress_label.text() == ""
+    for action in created.category_actions.values():
+        assert not action.isEnabled()
+    assert not created.findChild(QAction, "action_undo").isEnabled()  # type: ignore[union-attr]
+    for button in created.category_buttons.values():
+        assert not button.isEnabled()
+
+
+def test_restore_last_session_opens_the_remembered_folder(
+    qtbot: QtBot, window: Callable[..., MainWindow], sample_folder: Path, tmp_path: Path
+) -> None:
+    """A remembered folder is reopened straight into the stage."""
+    created = window(Config(last_folder=sample_folder))
+
+    assert created.restore_last_session()
+    assert created.current_page == "stage"
+    assert created.progress_label.text() == "Image 1 of 3"
+    assert created.sorter is not None
+    assert created.sorter.total == 3
+    assert sample_folder.name in created.windowTitle()
+    assert created.swipe_widget.card.scaled_pixmap() is not None
+
+
+def test_restore_without_a_folder_keeps_the_welcome_page(
+    window: Callable[..., MainWindow],
+) -> None:
+    """No remembered folder means no session to restore."""
+    created = window()
+
+    assert not created.restore_last_session()
+    assert created.current_page == "welcome"
+
+
+def test_restore_with_a_missing_folder_stays_on_welcome(
+    window: Callable[..., MainWindow], tmp_path: Path
+) -> None:
+    """A deleted folder is reported in the status bar, not as a modal error."""
+    created = window(Config(last_folder=tmp_path / "gone"))
+
+    assert not created.restore_last_session()
+    assert created.current_page == "welcome"
+    assert "no longer available" in created.statusBar().currentMessage()
+
+
+def test_open_folder_rejects_a_missing_folder(
+    window: Callable[..., MainWindow],
+    dialogs: list[tuple[str, str, str]],
+    tmp_path: Path,
+) -> None:
+    """An unusable folder is reported and nothing changes."""
+    created = window()
+
+    assert not created.open_folder(tmp_path / "nope")
+    assert created.current_page == "welcome"
+    assert [kind for kind, _title, _message in dialogs] == ["error"]
+    assert "Could not open folder" in dialogs[0][1]
+
+
+def test_open_folder_reports_a_folder_without_images(
+    window: Callable[..., MainWindow],
+    dialogs: list[tuple[str, str, str]],
+    tmp_path: Path,
+) -> None:
+    """An empty folder explains the supported formats instead of showing a blank card."""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    created = window()
+
+    assert not created.open_folder(empty)
+    assert created.current_page == "welcome"
+    assert dialogs[0][0] == "info"
+    assert dialogs[0][1] == "No images found"
+
+
+def test_open_folder_starts_a_session(
+    window: Callable[..., MainWindow], sample_folder: Path, tmp_path: Path
+) -> None:
+    """Opening a folder shows the first image, remembers it and persists that."""
+    created = window()
+
+    assert created.open_folder(sample_folder)
+
+    assert created.current_page == "stage"
+    assert created.progress_label.text() == "Image 1 of 3"
+    assert f"{sample_folder.name}" in created.windowTitle()
+    assert "Good 0" in created.status_counts_label.text()
+    assert "3 left" in created.status_counts_label.text()
+    assert created.config.last_folder == sample_folder
+    assert created.welcome_screen.recent_folders()[0] == sample_folder
+    assert load_config(tmp_path / "config.json").last_folder == sample_folder
+    assert created.category_actions["Good"].isEnabled()
+    assert created.category_buttons["Good"].isEnabled()
+
+
+def test_recent_folders_from_config_are_offered(
+    window: Callable[..., MainWindow], tmp_path: Path
+) -> None:
+    """The welcome page starts with the recents stored in the config file."""
+    recents = (tmp_path / "one", tmp_path / "two")
+    created = window(Config(recent_folders=recents))
+
+    assert created.welcome_screen.recent_folders() == recents
+
+
+def test_opening_a_folder_promotes_it_in_the_recents(
+    window: Callable[..., MainWindow], sample_folder: Path, tmp_path: Path
+) -> None:
+    """The most recently opened folder moves to the front of the list."""
+    older = tmp_path / "older"
+    created = window(Config(recent_folders=(older,)))
+
+    created.open_folder(sample_folder)
+
+    assert created.welcome_screen.recent_folders() == (sample_folder, older)
+
+
+def test_save_state_persists_the_window_geometry(
+    qtbot: QtBot, window: Callable[..., MainWindow], sample_folder: Path, tmp_path: Path
+) -> None:
+    """Closing remembers the size so the next launch looks the same."""
+    created = window()
+    created.open_folder(sample_folder)
+    created.resize(700, 560)
+
+    created.save_state()
+
+    saved = load_config(tmp_path / "config.json")
+    assert saved.window == WindowConfig(width=700, height=560)
+    assert saved.last_folder == sample_folder
+
+
+def test_closing_the_window_saves_the_session(
+    qtbot: QtBot, window: Callable[..., MainWindow], sample_folder: Path, tmp_path: Path
+) -> None:
+    """``closeEvent`` writes the configuration without being asked."""
+    created = window()
+    created.open_folder(sample_folder)
+
+    created.close()
+
+    assert load_config(tmp_path / "config.json").last_folder == sample_folder
+
+
+def test_switch_to_another_folder_through_the_picker(
+    window: Callable[..., MainWindow],
+    fake_file_dialog: type[FakeFileDialog],
+    make_images: Callable[..., list[Path]],
+    tmp_path: Path,
+) -> None:
+    """File → Open Folder uses the dialog and starts a new session."""
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    make_images(first, count=1)
+    make_images(second, count=2, prefix="SECOND_", fmt="PNG")
+    created = window()
+    created.open_folder(first)
+
+    fake_file_dialog.result = str(second)
+    created.findChild(QAction, "action_open_folder").trigger()  # type: ignore[union-attr]
+
+    assert created.sorter is not None
+    assert created.sorter.source_folder.name == "second"
+    assert created.progress_label.text() == "Image 1 of 2"
+    assert created.sorter.total == 2
+
+
+# ----------------------------------------------------------------------
+# Committing decisions
+# ----------------------------------------------------------------------
+
+
+def test_footer_button_moves_the_image(
+    qtbot: QtBot, window: Callable[..., MainWindow], sample_folder: Path
+) -> None:
+    """A click on the footer is an alternative to a drag."""
+    created = window()
+    created.open_folder(sample_folder)
+
+    qtbot.mouseClick(created.category_buttons["Bad"], Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: (sample_folder / "Bad" / "IMG_1.jpg").exists(), timeout=5000)
+
+    assert not (sample_folder / "IMG_1.jpg").exists()
+    assert created.progress_label.text() == "Image 2 of 3"
+    assert "Bad 1" in created.status_counts_label.text()
+    assert "2 left" in created.status_counts_label.text()
+    assert created.swipe_widget.card.scaled_pixmap() is not None
+
+
+def test_keyboard_action_moves_the_image(
+    qtbot: QtBot, window: Callable[..., MainWindow], sample_folder: Path
+) -> None:
+    """The arrow/WASD action for a category commits it."""
+    created = window()
+    created.open_folder(sample_folder)
+
+    commit(qtbot, created, "Great")
+
+    assert (sample_folder / "Great" / "IMG_1.jpg").exists()
+    assert "Great 1" in created.status_counts_label.text()
+
+
+def test_each_category_lands_in_its_own_folder(
+    qtbot: QtBot,
+    window: Callable[..., MainWindow],
+    make_images: Callable[..., list[Path]],
+    tmp_path: Path,
+) -> None:
+    """All four decisions map to the folders the sorter manages."""
+    folder = tmp_path / "four"
+    make_images(folder, count=4)
+    created = window()
+    created.open_folder(folder)
+
+    for category in CATEGORIES:
+        commit(qtbot, created, category)
+
+    for index, category in enumerate(CATEGORIES, start=1):
+        assert (folder / category / f"IMG_{index}.jpg").exists()
+    assert created.current_page == "completion"
+
+
+def test_finishing_the_deck_shows_the_summary(
+    qtbot: QtBot, window: Callable[..., MainWindow], sample_folder: Path
+) -> None:
+    """The last decision swaps in the completion page with the session counts."""
+    created = window()
+    created.open_folder(sample_folder)
+
+    commit(qtbot, created, "Good")
+    commit(qtbot, created, "Good")
+    commit(qtbot, created, "OK")
+
+    assert created.current_page == "completion"
+    assert created.completion_screen.headline.text() == "All done! 3 images sorted"
+    assert created.completion_screen.buttons["open"].isEnabled()
+    assert created.progress_label.text() == ""
+    assert "0 left" in created.status_counts_label.text()
+    for action in created.category_actions.values():
+        assert not action.isEnabled()
+    for button in created.category_buttons.values():
+        assert not button.isEnabled()
+
+
+def test_second_decision_is_ignored_while_the_card_flies(
+    qtbot: QtBot, window: Callable[..., MainWindow], sample_folder: Path
+) -> None:
+    """A rapid double press must not move two files for one image."""
+    created = window()
+    created.open_folder(sample_folder)
+
+    created.category_actions["Good"].trigger()
+    created.category_actions["Bad"].trigger()
+    qtbot.waitUntil(
+        lambda: created.sorter is not None and sum(created.sorter.counts.values()) == 1,
+        timeout=5000,
+    )
+
+    assert created.sorter is not None
+    assert created.sorter.counts == {"Good": 1}
+    assert (sample_folder / "Good" / "IMG_1.jpg").exists()
+    assert not list((sample_folder / "Bad").iterdir())
+
+
+def test_skip_keeps_the_file_and_advances(
+    qtbot: QtBot, window: Callable[..., MainWindow], sample_folder: Path
+) -> None:
+    """Space leaves the image in place and shows the next one."""
+    created = window()
+    created.open_folder(sample_folder)
+    skip = created.findChild(QAction, "action_skip")
+    assert skip is not None and skip.isEnabled()
+
+    skip.trigger()
+
+    assert (sample_folder / "IMG_1.jpg").exists()
+    assert created.progress_label.text() == "Image 2 of 3"
+    assert "3 left" in created.status_counts_label.text()
+    assert created.sorter is not None and created.sorter.counts == {}
+
+
+def test_skipping_the_last_image_finishes_the_session(
+    qtbot: QtBot,
+    window: Callable[..., MainWindow],
+    make_images: Callable[..., list[Path]],
+    tmp_path: Path,
+) -> None:
+    """Skipping everything ends on the summary with zero moves."""
+    folder = tmp_path / "skipall"
+    make_images(folder, count=2)
+    created = window()
+    created.open_folder(folder)
+    skip = created.findChild(QAction, "action_skip")
+    assert skip is not None
+
+    skip.trigger()
+    skip.trigger()
+
+    assert created.current_page == "completion"
+    assert created.completion_screen.headline.text() == "All done! 0 images sorted"
+    assert len(list(folder.glob("*.jpg"))) == 2
+
+
+# ----------------------------------------------------------------------
+# Undo
+# ----------------------------------------------------------------------
+
+
+def test_undo_restores_the_last_image(
+    qtbot: QtBot, window: Callable[..., MainWindow], sample_folder: Path
+) -> None:
+    """Undo moves the file back, shows it again and clears the counter."""
+    created = window()
+    created.open_folder(sample_folder)
+    commit(qtbot, created, "Good")
+    undo = created.findChild(QAction, "action_undo")
+    assert undo is not None and undo.isEnabled()
+
+    undo.trigger()
+
+    assert (sample_folder / "IMG_1.jpg").exists()
+    assert not (sample_folder / "Good" / "IMG_1.jpg").exists()
+    assert created.current_page == "stage"
+    assert created.progress_label.text() == "Image 1 of 3"
+    assert "Good 0" in created.status_counts_label.text()
+    assert not undo.isEnabled()
+
+
+def test_undo_from_the_summary_returns_to_the_stage(
+    qtbot: QtBot,
+    window: Callable[..., MainWindow],
+    make_images: Callable[..., list[Path]],
+    tmp_path: Path,
+) -> None:
+    """Finishing the deck is not a one-way trip: the last move can be undone."""
+    folder = tmp_path / "one"
+    make_images(folder, count=1)
+    created = window()
+    created.open_folder(folder)
+    commit(qtbot, created, "OK")
+    assert created.current_page == "completion"
+
+    undo = created.findChild(QAction, "action_undo")
+    assert undo is not None and undo.isEnabled()
+    undo.trigger()
+
+    assert created.current_page == "stage"
+    assert created.progress_label.text() == "Image 1 of 1"
+    assert (folder / "IMG_1.jpg").exists()
+
+
+# ----------------------------------------------------------------------
+# Error paths
+# ----------------------------------------------------------------------
+
+
+def test_unreadable_image_is_reported_and_skipped(
+    qtbot: QtBot,
+    window: Callable[..., MainWindow],
+    dialogs: list[tuple[str, str, str]],
+    make_images: Callable[..., list[Path]],
+    tmp_path: Path,
+) -> None:
+    """A corrupt file is reported once and left in place."""
+    folder = tmp_path / "corrupt"
+    make_images(folder, count=1)
+    make_images(folder, count=1, start=2, corrupt=True)
+    created = window()
+    created.open_folder(folder)
+    assert created.progress_label.text() == "Image 1 of 2"
+
+    commit(qtbot, created, "Good")
+    wait_for_dialog(qtbot, dialogs)
+
+    assert dialogs[0][0] == "warning"
+    assert dialogs[0][1] == "Image skipped"
+    assert (folder / "IMG_2.jpg").exists()
+    assert created.current_page == "completion"
+    note = created.completion_screen.findChild(QWidget, "completion_skipped")
+    assert note is not None and note.isVisible()
+
+
+def test_folder_of_only_corrupt_images_finishes_immediately(
+    window: Callable[..., MainWindow],
+    dialogs: list[tuple[str, str, str]],
+    make_images: Callable[..., list[Path]],
+    tmp_path: Path,
+) -> None:
+    """Nothing decodable means the session ends with an explanation, not a crash."""
+    folder = tmp_path / "broken"
+    make_images(folder, count=2, corrupt=True)
+    created = window()
+
+    assert created.open_folder(folder)
+
+    assert created.current_page == "completion"
+    assert [kind for kind, _title, _message in dialogs] == ["warning", "warning"]
+    assert created.completion_screen.headline.text() == "All done! 0 images sorted"
+
+
+def test_failed_move_keeps_the_image_queued(
+    qtbot: QtBot,
+    window: Callable[..., MainWindow],
+    dialogs: list[tuple[str, str, str]],
+    monkeypatch: pytest.MonkeyPatch,
+    sample_folder: Path,
+) -> None:
+    """A permission error leaves the session usable and the file untouched."""
+
+    def refuse(_self: Sorter, _category: str) -> None:
+        raise FileOperationError("permission denied", source=sample_folder / "IMG_1.jpg")
+
+    monkeypatch.setattr(Sorter, "categorize", refuse)
+    created = window()
+    created.open_folder(sample_folder)
+
+    created.category_actions["Good"].trigger()
+    wait_for_dialog(qtbot, dialogs)
+
+    assert dialogs[0][0] == "error"
+    assert dialogs[0][1] == "Could not move image"
+    assert created.current_page == "stage"
+    assert created.progress_label.text() == "Image 1 of 3"
+    assert (sample_folder / "IMG_1.jpg").exists()
+    assert created.sorter is not None and created.sorter.counts == {}
+    assert created.swipe_widget.is_interactive()
+    assert created.swipe_widget.card.scaled_pixmap() is not None
+
+
+def test_vanished_image_is_dropped_with_a_warning(
+    qtbot: QtBot,
+    window: Callable[..., MainWindow],
+    dialogs: list[tuple[str, str, str]],
+    sample_folder: Path,
+) -> None:
+    """A file deleted behind the app's back is reported and skipped."""
+    created = window()
+    created.open_folder(sample_folder)
+    (sample_folder / "IMG_1.jpg").unlink()
+
+    created.category_actions["Good"].trigger()
+    wait_for_dialog(qtbot, dialogs)
+
+    assert dialogs[0][0] == "warning"
+    assert dialogs[0][1] == "Image disappeared"
+    assert created.current_page == "stage"
+    assert created.progress_label.text() == "Image 1 of 2"
+    assert created.sorter is not None and created.sorter.counts == {}
+
+
+def test_undo_reports_a_destination_that_vanished(
+    qtbot: QtBot,
+    window: Callable[..., MainWindow],
+    dialogs: list[tuple[str, str, str]],
+    sample_folder: Path,
+) -> None:
+    """Undo cannot guess where the file went, so it says so."""
+    created = window()
+    created.open_folder(sample_folder)
+    commit(qtbot, created, "Good")
+    (sample_folder / "Good" / "IMG_1.jpg").unlink()
+    undo = created.findChild(QAction, "action_undo")
+    assert undo is not None
+
+    undo.trigger()
+
+    assert dialogs[0][0] == "warning"
+    assert dialogs[0][1] == "Could not undo"
+    assert created.current_page == "stage"
+
+
+# ----------------------------------------------------------------------
+# Restarting and helpers
+# ----------------------------------------------------------------------
+
+
+def test_open_source_folder_rescans_after_finishing(
+    qtbot: QtBot,
+    window: Callable[..., MainWindow],
+    make_images: Callable[..., list[Path]],
+    sample_folder: Path,
+) -> None:
+    """The summary's first button starts a new session on the same folder."""
+    created = window()
+    created.open_folder(sample_folder)
+    for _ in range(3):
+        commit(qtbot, created, "Good")
+    assert created.current_page == "completion"
+    make_images(sample_folder, count=1, prefix="LATE_", start=9)
+
+    qtbot.mouseClick(created.completion_screen.buttons["open"], Qt.MouseButton.LeftButton)
+
+    assert created.current_page == "stage"
+    assert created.progress_label.text() == "Image 1 of 1"
+    assert created.sorter is not None and created.sorter.counts == {}
+
+
+def test_category_actions_expose_the_documented_keys(
+    window: Callable[..., MainWindow],
+) -> None:
+    """Arrows and WASD are both bound, window-wide."""
+    created = window()
+
+    expected = {
+        "Good": ["Right", "D"],
+        "Bad": ["Left", "A"],
+        "Great": ["Up", "W"],
+        "OK": ["Down", "S"],
+    }
+    for category, keys in expected.items():
+        action = created.category_actions[category]
+        assert [sequence.toString() for sequence in action.shortcuts()] == keys
+        assert action.shortcutContext() == Qt.ShortcutContext.WindowShortcut
+
+
+def test_pil_images_are_converted_without_losing_alpha() -> None:
+    """The GUI boundary keeps RGBA pixels intact for transparent previews."""
+    image = Image.new("RGBA", (4, 3), (10, 20, 30, 40))
+
+    converted = qimage_from_pil(image)
+
+    assert (converted.width(), converted.height()) == (4, 3)
+    colour = converted.pixelColor(1, 1)
+    assert (colour.red(), colour.green(), colour.blue(), colour.alpha()) == (10, 20, 30, 40)
+
+
+def test_default_sorter_factory_scans_without_decoding(
+    make_images: Callable[..., list[Path]], tmp_path: Path
+) -> None:
+    """Opening a folder is a stat-only pass; decoding happens per image."""
+    make_images(tmp_path, count=1)
+    make_images(tmp_path, count=1, prefix="broken_", corrupt=True)
+
+    sorter = default_sorter_factory(tmp_path)
+
+    assert sorter.total == 2

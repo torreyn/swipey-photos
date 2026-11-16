@@ -1,20 +1,28 @@
 """Qt presentation layer.
 
 Responsibility
-    Everything the user sees and touches: the main window shell, the swipeable
-    image card, animation choreography, keyboard bindings and the background
-    worker adapters that keep the GUI thread responsive.
+    Everything the user sees and touches: the main window shell, the welcome and
+    completion pages, the swipeable image card, animation choreography, keyboard
+    bindings and the background worker adapters that keep the GUI thread
+    responsive.
 
 Contains
-    main_window.py   MainWindow: menus, toolbar, status bar, session wiring.
-    swipe_card.py    SwipeCard: renders one image, owns the drag/rotation maths,
-                     paints the feedback badge and flies itself out on commit.
-    swipe_widget.py  SwipeWidget: the swipe stage that hosts the cards, feeds the
-                     next image and forwards committed categories.
-    animator.py      CardAnimator: deck-level choreography (fly-in of the next
-                     card) and the shared timing/easing table.
-    workers.py       QRunnable/QObject adapters that call synchronous core
-                     functions on a QThreadPool and deliver results via signals.
+    main_window.py      MainWindow: menus, status bar, session wiring, the
+                        three-page flow (welcome → stage → summary).
+    welcome_screen.py   WelcomeScreen: "Select Folder" empty state plus the five
+                        most recent folders.
+    completion_screen.py CompletionScreen: per-category summary with restart,
+                        pick-another-folder and quit actions.
+    swipe_card.py       SwipeCard: renders one image, owns the drag/rotation
+                        maths, paints the feedback badge, flies itself out.
+    swipe_widget.py     SwipeWidget/CardStage: the stage that hosts the card,
+                        feeds it pixmaps and forwards committed categories.
+    animator.py         CardAnimator: deck-level choreography (fly-in of the next
+                        card) and the shared timing/easing table.
+    branding.py         Generated window icon and welcome logo (no asset files).
+    workers.py          QRunnable/QObject adapters that call synchronous core
+                        functions on a QThreadPool and deliver results via
+                        signals.
 
 Boundary rules
     * This package (together with :mod:`image_swiper.app`) is the only place

@@ -1,7 +1,10 @@
 # Architecture
 
-> Status: **design/documentation only.** No behaviour is implemented yet; this
-> document is the contract that the implementation must satisfy.
+> Status: **implemented.** `core/`, `utils/` and the UI layer described below
+> exist and are covered by the test suite; the only parts still marked as
+> planned are the deck fly-in animator (`ui/animator.py`) and the background
+> worker adapters (`ui/workers.py`). This document is the contract the
+> implementation satisfies.
 
 ## 1. Purpose and scope
 
@@ -140,44 +143,71 @@ ImageSwiperApplication (app.py)
 
 ### 5.1 App shell
 
-`__main__.py` parses arguments, calls `setup_logging()`, and delegates to
-`app.run()`. `app.py` creates exactly one `QApplication`, sets
-`applicationName="image-swiper"`, `applicationDisplayName="ImageSwiper"`,
-`organizationName` and the window icon, loads config (falling back to defaults
-with a visible warning on parse errors), installs the Qt message handler, builds
-the object graph, shows the window, and returns `app.exec()`.
+`__main__.py` parses arguments (optional folder, `--version`, `--config`,
+`--log-level`, `--verbose`), calls `setup_logging()`, answers `--version`
+without importing Qt, and delegates to `app.run()`.
+
+`app.py` is the composition root. `run()` sets the high-DPI rounding policy
+*before* constructing exactly one `QApplication`, sets `applicationName=
+"image-swiper"`, `applicationDisplayName="ImageSwiper"`, `organizationName`,
+the version, the desktop file name and the window icon, installs the Qt message
+handler, loads config, calls `build_main_window()`, shows the window, opens the
+requested folder (or `MainWindow.restore_last_session()`), and returns
+`app.exec()`. `build_main_window(app, config, config_path=...)` is the seam
+integration tests use to get the wired window without running a loop.
 
 Startup order matters: logging before config (config errors must be logged),
-config before widgets (geometry, thresholds), Qt handler after `QApplication`
-exists (it needs Qt types to map message levels).
+config before widgets (geometry), Qt handler after `QApplication` exists (it
+needs Qt types to map message levels).
 
-Shutdown: `aboutToQuit` saves config (window width/height, last folder) and
-waits on the thread pool with a short timeout. Unfinished preview jobs are
-cancelled cooperatively; the process never blocks on a stuck network mount for
-longer than that timeout.
+Shutdown: `aboutToQuit` and `MainWindow.closeEvent` both call `save_state()`,
+which writes window size, `last_folder` and `recent_folders`. Saving is
+best-effort: a read-only config directory produces a status-bar message, never a
+crash. Once `ui/workers.py` lands, shutdown will also wait on the thread pool
+with a short timeout; today preview decoding is synchronous on the GUI thread.
 
 ### 5.2 UI layer
 
-**`MainWindow`** is the presenter. It owns the session list, the current index,
-progress counters and error surfacing. Its slots translate UI intent into calls
-on the core façade:
+**`MainWindow`** is the presenter and the only class that holds session state:
+the active `Sorter`, three pages in a `QStackedWidget` (welcome, stage,
+completion), the progress counters and a `_busy` flag. It performs no I/O
+itself. Its slots translate UI intent into core calls:
 
 | Signal (from) | Handling in `MainWindow` |
 | --- | --- |
-| `open_folder_requested()` (action/dialog) | validate via `FolderManager(...)`, start a `ScanWorker` |
-| `sort_requested(direction)` (`SwipeWidget` or shortcut) | if idle: play fly-out → dispatch `MoveWorker` for the current entry |
-| `undo_requested()` | pop history via `Sorter.undo`, re-show the restored image |
-| `skip_requested()` | rotate the entry to the end of the queue, no I/O |
-| `scan_finished(entries)` (`workers`) | populate the queue, reset counters, show the first image |
-| `move_finished(record)` | update counters/status bar, request the next preview |
-| `move_failed(path, message)` | restore the card, show an inline error, keep the entry |
+| `WelcomeScreen.folder_selected(str)` | `open_folder()`: build the sorter, remember the folder, show the first preview |
+| `SwipeWidget.swipe_committed(str)` | guard `_busy`; `Sorter.categorize()`; report or skip on failure; load the next preview or show the summary |
+| category `QAction` (arrows/WASD) or footer button | `SwipeWidget.trigger_swipe(category)`, so keyboard, click and drag share the card's fly-out |
+| `File → Undo Last` (Ctrl+Z) | `Sorter.undo()`, re-show the restored image, return to the stage |
+| skip `QAction` (Space) | `Sorter.advance()`; the file stays in the folder |
+| `CompletionScreen.open_source_requested` | rescan the same folder |
+| `CompletionScreen.pick_folder_requested` | `QFileDialog` → `open_folder()` |
+| `CompletionScreen.quit_requested`, File → Quit | `close()`, which saves state |
 
-Preconditions are enforced in the window, not the widget: a second
-`sort_requested` while a move is in flight is ignored, never allowed to move the
-same file twice.
+Preconditions are enforced in the window: `_can_decide()` is false while a move
+is in flight, on the welcome/summary pages, or when the deck is empty, and the
+actions and footer buttons are disabled accordingly. A second decision during
+the ~250 ms fly-out is dropped by the card itself, so the same file can never be
+moved twice.
 
-**`SwipeWidget`** renders one `QPixmap` and converts pointer input into a
-category name. It owns no session state.
+Every failure is logged and routed through `_report_info`, `_report_warning` or
+`_report_error` — the only methods that open a `QMessageBox`, and therefore the
+seam that offscreen tests replace.
+
+**`SwipeWidget`** is the stage: a `CardStage` that assigns the card geometry in
+`resizeEvent` (the card cannot live in a layout because it moves itself), plus a
+caption line. It shows one pixmap at a time, re-arms the card with `set_pixmap`,
+forwards `SwipeCard.swiped` as `swipe_committed(str)` and gates commits with
+`set_interactive(False)` while the window is busy. It owns no session state and
+touches no files.
+
+**`WelcomeScreen`** and **`CompletionScreen`** are pure views. The welcome page
+reports a chosen folder and lists at most five recents; the summary renders the
+per-category counts it is given and emits restart/pick/quit. Neither reads the
+sorter or the configuration directly.
+
+The diagram below is `SwipeCard`'s internal state machine (`ui/swipe_card.py`),
+where pointer handling, thresholds, rotation and the badge live:
 
 ```text
              key press (window forwards)
@@ -193,24 +223,34 @@ category name. It owns no session state.
                      └───────────┘        (owner loads the next image)
 ```
 
-- Axis resolution: the larger absolute delta wins; vertical needs
-  100 px vs. 120 px horizontally so sideways decisions stay easy. Ties go to
-  horizontal.
-- Drag visuals: translation follows the pointer 1:1, rotation is
-  `clamp(dx / widget_width * 24°, -12°, 12°)`, and badge opacity is
+- Axis resolution: each axis offset is divided by its own threshold (25 % of the
+  card width horizontally, 20 % of the height vertically), so the dominant
+  gesture wins even though the pixel distances differ. Ties go to horizontal.
+- Drag visuals: translation follows the pointer 1:1, rotation is proportional to
+  horizontal travel and capped at 15°, badge opacity is
   `min(1.0, distance / threshold)`.
-- On release below threshold, emit `drag_progress_changed(0.0)` and animate back.
-- `set_interactive(False)` during fly-out prevents double commits; the window
-  re-enables input when the next image is ready.
-- Keyboard input is owned by the window (so focus on the toolbar does not break
-  shortcuts) and forwarded as an explicit `commit(direction)` call.
+- On release below the threshold the card springs back and the badge fades out;
+  no category is emitted.
+- `SwipeWidget.set_interactive(False)` disables the card while a move is in
+  flight, and `trigger_swipe()` is ignored mid-animation, so a held key cannot
+  commit the same image twice. The window re-enables input when the next
+  preview is ready.
+- Keyboard input: the window owns window-wide `QAction`s (arrows and WASD) and
+  forwards them to `SwipeWidget.trigger_swipe(category)`. The card maps the same
+  keys itself so the standalone demo works without the window.
 
-**`CardAnimator`** encapsulates `QPropertyAnimation` groups for the card's
-`pos`, a custom `rotation` `Q_PROPERTY` and `windowOpacity`. It exposes
-`fly_out`, `fly_in`, `spring_back` and `stop`, emits `finished(name)`, uses
-durations from config (clamped 60–600 ms), and degrades to an instant state
-change when reduced motion is requested. Interrupting an animation snaps the
-card to a defined endpoint first — no overlapping animation groups.
+**`branding.py`** paints the window icon and the welcome logo at runtime (one
+rounded tile, a card stack and two chevrons) so the project ships no binary
+assets; `app.py` and `WelcomeScreen` share it.
+
+**`CardAnimator`** (planned, milestone M4) encapsulates `QPropertyAnimation`
+groups for the card's `pos`, a custom `rotation` `Q_PROPERTY` and
+`windowOpacity`. It exposes `fly_out`, `fly_in`, `spring_back` and `stop`, emits
+`finished(name)`, uses durations from config (clamped 60–600 ms), and degrades to
+an instant state change when reduced motion is requested. Interrupting an
+animation snaps the card to a defined endpoint first — no overlapping animation
+groups. Today the card flies itself out and springs itself back; the stage simply
+swaps the pixmap.
 
 **`workers.py`** adapts synchronous core calls to the Qt thread pool. A worker
 takes plain data, returns a frozen result object, emits `finished`/`failed`, and
@@ -291,10 +331,11 @@ actionable messages, and resolves XDG paths:
 A missing file yields defaults. Malformed JSON raises `ConfigError` and invalid
 values raise `ConfigValidationError`, so the UI can show a message and continue
 with defaults instead of silently discarding the user's settings. Unknown keys
-and a newer `version` only warn. Writes are atomic (tempfile + `fsync` +
-`os.replace`), with `0o600` for the file and `0o700` for the directory. A
-`version = 1` key reserves room for migrations. Precedence: CLI > environment >
-file > defaults.
+and a newer `version` only warn. `recent_folders` keeps at most five newest-first
+paths and feeds the welcome page; `with_recent_folder()` promotes a folder and
+drops duplicates. Writes are atomic (tempfile + `fsync` + `os.replace`), with
+`0o600` for the file and `0o700` for the directory. A `version = 1` key reserves
+room for migrations. Precedence: CLI > environment > file > defaults.
 
 **`logging_setup`** configures one logger hierarchy (`image_swiper.*`) with a
 rotating file handler plus an optional stderr handler, and exposes
@@ -309,67 +350,75 @@ the UI layer (M2). Levels follow CONTRIBUTING.md; there is no `print()` in
 The core loop, from folder selection to the next image:
 
 ```text
-1. User picks a folder
+1. User picks a folder (welcome page, Ctrl+O, or a CLI argument)
        ↓
-2. FolderManager(folder) → Good/Bad/Great/OK created, layout validated
+2. MainWindow.open_folder() → default_sorter_factory(folder)
        ↓
-3. ImageLoader.load() → sorted list[Path]
-       ↓  (background thread in M2)
-4. Sorter(folder) owns the queue; progress comes from total/remaining_count
+3. FolderManager(folder) → Good/Bad/Great/OK created, layout validated
+   ImageLoader(folder, validate=False).load() → sorted list[Path]  (stat only)
+       ↓
+4. Sorter owns the queue; progress comes from total/remaining_count
        ↓
 5. ImageLoader.load_preview(path) → (PIL image, original size)
-       ↓  GUI thread converts to QPixmap
-6. SwipeWidget.set_image(pixmap) — card visible, interactive
+       ↓  MainWindow.qimage_from_pil() → QPixmap on the GUI thread
+6. SwipeWidget.show_image(pixmap, caption=...) — card armed, interactive
        ↓
-7. Gesture: mouse drag past threshold, OR arrow/WASD key
+7. Gesture: mouse drag past threshold, OR arrow/WASD key, OR footer button
        ↓
-8. swipe_committed(direction) → MainWindow maps it to a category
+8. SwipeCard flies itself out, then emits swiped(category)
        ↓
-9. CardAnimator.fly_out(direction) (≈180 ms)  +  MoveWorker dispatched
+9. SwipeWidget forwards it as swipe_committed(category)
        ↓
-10. Sorter.categorize(category) → FolderManager.move_image → file_ops.move_file
+10. MainWindow: Sorter.categorize(category) → FolderManager.move_image
        ↓  collision-free final path, MoveRecord appended to undo history
-11. move_finished(record) → counters, status bar, undo enabled
+11. Counters, progress label, status bar and undo action refreshed
        ↓
-12. Next preview shown (often already prefetched) → back to step 6
+12. Next preview decoded and shown → back to step 6
        ↓
-13. Queue empty → completion screen with per-category counts
+13. Queue empty → CompletionScreen with per-category counts
 ```
+
+The whole loop runs on the GUI thread today. The expensive part of opening a
+folder is avoided by scanning with ``validate=False`` (stat + extension check
+only); one preview is decoded per image, which is tens of milliseconds. Moving
+steps 3 and 5 onto `ui/workers.py` is the planned optimisation and changes
+nothing in the contracts above.
+
+The whole loop runs on the GUI thread today. The expensive part of opening a
+folder is avoided by scanning with `validate=False` (stat + extension check
+only); one preview is decoded per image, which is tens of milliseconds. Moving
+steps 3 and 5 onto `ui/workers.py` is the planned optimisation and changes
+nothing in the contracts above.
 
 ```mermaid
 sequenceDiagram
     actor U as User
     participant W as MainWindow
     participant SW as SwipeWidget
-    participant A as CardAnimator
-    participant P as QThreadPool
-    participant L as ImageLoader
+    participant C as SwipeCard
     participant S as Sorter
+    participant L as ImageLoader
     participant F as file_ops
     participant D as Filesystem
 
-    U->>W: Open folder (Ctrl+O)
-    W->>P: ScanWorker(root)
-    P->>L: load()
-    L->>D: iterdir, access, verify
-    L-->>P: list[Path]
-    P-->>W: scan_finished(paths)
-    W->>P: PreviewWorker(paths[0])
-    P->>L: load_preview(path)
-    L-->>P: (image, original size)
-    P-->>W: preview_ready(...)
-    W->>SW: set_image(QPixmap)
-    U->>SW: drag or arrow key
-    SW-->>W: swipe_committed(RIGHT)
-    W->>A: fly_out(RIGHT)
-    W->>P: MoveWorker(path, "Good")
-    P->>S: categorize("Good")
-    S->>F: move_file(path, Good/)
+    U->>W: Open folder (welcome page / Ctrl+O)
+    W->>S: Sorter(folder) — FolderManager creates Good/Bad/Great/OK
+    S->>L: load() — stat-only scan
+    L->>D: iterdir + access
+    L-->>S: sorted list[Path]
+    W->>L: load_preview(current)
+    L->>D: decode + downscale
+    L-->>W: (PIL image, size)
+    W->>SW: show_image(QPixmap)
+    U->>C: drag past threshold / arrow key / footer button
+    C-->>SW: swiped("Good") — after the fly-out
+    SW-->>W: swipe_committed("Good")
+    W->>S: categorize("Good")
+    S->>F: move_image(path, Good/)
     F->>D: rename / copy+unlink
     F-->>S: final destination
-    S-->>P: MoveRecord
-    P-->>W: move_finished(record)
-    W->>SW: set_image(next preview)
+    S-->>W: MoveRecord
+    W->>SW: show_image(next preview)
 ```
 
 ### 6.2 Threading model
@@ -377,25 +426,28 @@ sequenceDiagram
 | Work | Where | Why |
 | --- | --- | --- |
 | Widgets, painting, animations | GUI thread | Qt requirement |
-| Folder scan + Pillow `verify()` | thread pool (1–2 workers) | I/O + decode latency |
-| Preview decode (LANCZOS downscale) | thread pool (2–4 workers) | CPU-bound, ~10–80 ms per image |
-| File move/copy | **single** worker | serialises history and keeps undo ordering deterministic |
+| Folder scan (stat + extension check) | GUI thread today; thread pool planned | ~50 ms for 5 000 files, acceptable inline |
+| Preview decode (LANCZOS downscale) | GUI thread today; thread pool planned | CPU-bound, 10–80 ms per image |
+| File move/copy | GUI thread today; **one** worker planned | serialises history and keeps undo ordering deterministic |
 | Config read | GUI thread at startup | tiny file, once |
-| Config write | GUI thread on `aboutToQuit` | avoid races with shutdown |
+| Config write | GUI thread on folder change and close | avoid races with shutdown |
 
-Rules that make this safe:
+Rules that keep the current single-threaded loop safe — and that the worker
+adapters must preserve when they land:
 
+- A decision is only accepted when the window is on the stage page, not busy and
+  the deck is not empty (`MainWindow._can_decide()`); the card additionally
+  ignores `trigger_swipe()` while it is animating. Double moves are impossible
+  even if two input sources fire at once.
 - Workers receive immutable data and emit results through signals; they never
-  touch a `QWidget`, `QPixmap` or `QConfig`.
-- Every scan/preview job carries a monotonically increasing `generation`
-  counter. Results from a previous folder are dropped, so switching folders
-  quickly cannot show a stale image.
-- Preview queue depth is capped (prefetch window = 2) and stale requests are
-  discarded; rapid swiping never floods the pool.
-- Moves are serialised. The sorter also takes an internal `threading.Lock` so a
-  future caller cannot accidentally interleave two moves.
-- Cancellation is cooperative (`threading.Event`); a job checks it between files
-  and after decode, and exits quietly.
+  touch a `QWidget`, `QPixmap` or the config object.
+- Every scan/preview job will carry a monotonically increasing `generation`
+  counter, so a result from a previous folder is dropped instead of showing a
+  stale image.
+- Preview queue depth will be capped (prefetch window = 2); stale requests are
+  discarded so rapid swiping never floods the pool.
+- Moves are serialised: `Sorter` appends history in call order, so a parallel
+  caller must not interleave two `categorize()` calls.
 - On shutdown, `QThreadPool.waitForDone(2000)` runs after hiding the window;
   remaining jobs are abandoned rather than blocking exit indefinitely.
 
@@ -403,20 +455,26 @@ Rules that make this safe:
 
 `MainWindow` exposes exactly one session state at a time. Input is interpreted
 against that state, which is what prevents double moves and lost undo entries.
+The state is the visible page plus the `_busy` flag, so it is always
+inspectable (`MainWindow.current_page` returns `"welcome"`, `"stage"` or
+`"completion"`).
 
 | State | Meaning | Accepts | Next |
 | --- | --- | --- | --- |
-| `EMPTY` | no folder chosen / no images | open folder, quit | `SCANNING` |
-| `SCANNING` | folder being read in the background | cancel, quit | `READY` / `EMPTY` |
-| `READY` | image shown, waiting for input | swipe, key, skip, undo, open, rescan | `DECIDING` / `DONE` |
-| `DECIDING` | card animating out, move in flight | undo (after completion), open | `READY` / `DONE` |
-| `DONE` | queue drained | undo, open, rescan, summary | `READY` / `SCANNING` |
-| `ERROR` (overlay, not a state) | recoverable failure banner | dismiss, retry, open | previous state |
+| `EMPTY` (welcome page) | no folder chosen, or the last one is unusable | open folder, quit | `READY` |
+| `READY` (stage, not busy) | image shown, waiting for input | swipe, key, footer button, skip, undo, open | `DECIDING` / `DONE` |
+| `DECIDING` (stage, busy) | card animating out, move running | undo after completion, open | `READY` / `DONE` |
+| `DONE` (completion page) | queue drained | undo, rescan, pick another folder, quit | `READY` |
 
-Transitions are implemented as explicit methods (`_onScanFinished`,
-`_onSwipe`, `_onMoveFinished`, `_onMoveFailed`), each asserting its expected
-state. A failed move returns the card to `READY` with the image still in the
-queue — the same file can be retried safely because nothing was mutated.
+Transitions are explicit methods (`open_folder`, `_on_swipe_committed`,
+`_on_undo`, `_on_skip`, `_show_completion`), each guarding with `_busy` or
+`_can_decide()` instead of asserting: a stray signal must never raise inside a
+Qt callback. A failed move returns to `READY` with the image still queued and
+re-rendered — the same file can be retried safely because nothing was mutated.
+
+There is no separate `SCANNING` state today because the stat-only scan is fast
+enough to run inline; when `ui/workers.py` lands, the stage will be replaced by
+a progress page for that period.
 
 ## 8. Storage contract and undo
 

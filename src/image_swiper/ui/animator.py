@@ -43,5 +43,5 @@ Design notes
       groups per gesture: deferred deletions racing against widget destruction
       are the classic source of shutdown crashes in Qt apps.
 
-Not implemented yet (milestone M2).
+Not implemented yet (planned; the per-card animations already live in SwipeCard).
 """

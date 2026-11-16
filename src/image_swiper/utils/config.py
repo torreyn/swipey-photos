@@ -12,13 +12,14 @@ Public API
     ConfigError                     the file could not be read or parsed
     ConfigValidationError           a value is out of range or unknown
     WindowConfig(width, height)     remembered window size
-    Config(version, last_folder, window, theme)
+    Config(version, last_folder, recent_folders, window, theme)
     config_dir() / config_path()    $XDG_CONFIG_HOME/image-swiper/config.json
     default_config()                defaults used when no file exists yet
     load_config(path=None) -> Config
     save_config(config, path=None) -> Path
     validate_config(config) -> None
     to_dict(config) / from_dict(data)
+    with_recent_folder(config, folder) -> Config
 
 Behaviour
     * A missing file is not an error: defaults are returned. A malformed file
@@ -28,6 +29,9 @@ Behaviour
       chmodded ``0o600`` and moved into place with ``os.replace``, so a crash
       never leaves a half-written config behind. The directory is ``0o700``.
     * ``last_folder`` is stored as an absolute, expanded path string or ``null``.
+    * ``recent_folders`` is a newest-first list of at most
+      :data:`MAX_RECENT_FOLDERS` paths for the welcome screen;
+      :func:`with_recent_folder` promotes a folder and keeps it de-duplicated.
 
 Schema reference and examples: ``docs/CONFIGURATION.md``.
 """
@@ -38,7 +42,7 @@ import json
 import os
 import tempfile
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from .logging_setup import get_logger
@@ -60,8 +64,12 @@ DEFAULT_WINDOW_WIDTH = 1200
 DEFAULT_WINDOW_HEIGHT = 800
 MIN_WINDOW_SIZE = 200
 MAX_WINDOW_SIZE = 20000
+MAX_RECENT_FOLDERS = 5
+"""How many recently opened folders the welcome screen remembers."""
 
-_KNOWN_KEYS: frozenset[str] = frozenset({"version", "last_folder", "window", "theme"})
+_KNOWN_KEYS: frozenset[str] = frozenset(
+    {"version", "last_folder", "recent_folders", "window", "theme"}
+)
 _WINDOW_KEYS: frozenset[str] = frozenset({"width", "height"})
 
 
@@ -87,6 +95,7 @@ class Config:
 
     version: int = CONFIG_VERSION
     last_folder: Path | None = None
+    recent_folders: tuple[Path, ...] = ()
     window: WindowConfig = field(default_factory=WindowConfig)
     theme: str = THEME_SYSTEM
 
@@ -113,6 +122,7 @@ def to_dict(config: Config) -> dict[str, object]:
     return {
         "version": config.version,
         "last_folder": str(config.last_folder) if config.last_folder is not None else None,
+        "recent_folders": [str(folder) for folder in config.recent_folders],
         "window": {"width": config.window.width, "height": config.window.height},
         "theme": config.theme,
     }
@@ -150,6 +160,7 @@ def from_dict(data: Mapping[str, object]) -> Config:
     return Config(
         version=CONFIG_VERSION,
         last_folder=_as_optional_path(data.get("last_folder")),
+        recent_folders=_as_recent_folders(data.get("recent_folders", [])),
         window=window,
         theme=_as_str(data.get("theme", THEME_SYSTEM), "theme"),
     )
@@ -173,6 +184,14 @@ def validate_config(config: Config) -> None:
                 f"window.{name} must be between {MIN_WINDOW_SIZE} and {MAX_WINDOW_SIZE}, "
                 f"got {value}"
             )
+    if len(config.recent_folders) > MAX_RECENT_FOLDERS:
+        problems.append(
+            f"recent_folders must hold at most {MAX_RECENT_FOLDERS} entries, "
+            f"got {len(config.recent_folders)}"
+        )
+    for entry in config.recent_folders:
+        if not isinstance(entry, Path) or not str(entry).strip():
+            problems.append(f"recent_folders entries must be non-empty paths, got {entry!r}")
     if problems:
         raise ConfigValidationError("; ".join(problems))
 
@@ -246,6 +265,35 @@ def save_config(config: Config, path: Path | None = None) -> Path:
     return target
 
 
+def with_recent_folder(config: Config, folder: str | Path) -> Config:
+    """Return a copy of ``config`` that remembers *folder* as the newest one.
+
+    The folder becomes both ``last_folder`` and the first entry of
+    ``recent_folders``; duplicates are removed and the list is trimmed to
+    :data:`MAX_RECENT_FOLDERS`, so the welcome screen can show the last five
+    folders in most-recent-first order.
+
+    Args:
+        config: The configuration to derive from; it is not modified.
+        folder: Folder the user just opened.
+
+    Returns:
+        A new :class:`Config`; pass it to :func:`save_config` to persist it.
+    """
+    target = Path(folder).expanduser()
+    if not target.is_absolute():
+        target = target.resolve()
+    entries = [target]
+    for existing in config.recent_folders:
+        if existing != target and existing not in entries:
+            entries.append(existing)
+    return replace(
+        config,
+        last_folder=target,
+        recent_folders=tuple(entries[:MAX_RECENT_FOLDERS]),
+    )
+
+
 def _as_dict(value: object, what: str) -> dict[str, object]:
     """Return ``value`` as a string-keyed dictionary or raise ConfigError."""
     if not isinstance(value, dict):
@@ -281,3 +329,38 @@ def _as_optional_path(value: object) -> Path | None:
     if not value.strip():
         return None
     return Path(value).expanduser()
+
+
+def _as_recent_folders(value: object) -> tuple[Path, ...]:
+    """Return ``value`` as a de-duplicated tuple of paths, newest first.
+
+    Blank strings and repeats are dropped silently; a list longer than
+    :data:`MAX_RECENT_FOLDERS` is truncated with a WARNING instead of being
+    rejected, so a hand-edited file still opens the application.
+
+    Raises:
+        ConfigValidationError: ``value`` is not a list of strings.
+    """
+    if not isinstance(value, list | tuple):
+        raise ConfigValidationError(
+            f"recent_folders must be a JSON array of strings, got {type(value).__name__}"
+        )
+
+    folders: list[Path] = []
+    for entry in value:
+        if not isinstance(entry, str):
+            raise ConfigValidationError(f"recent_folders entries must be strings, got {entry!r}")
+        if not entry.strip():
+            continue
+        path = Path(entry).expanduser()
+        if path not in folders:
+            folders.append(path)
+
+    if len(folders) > MAX_RECENT_FOLDERS:
+        LOGGER.warning(
+            "config lists %d recent folders; keeping the newest %d",
+            len(folders),
+            MAX_RECENT_FOLDERS,
+        )
+        folders = folders[:MAX_RECENT_FOLDERS]
+    return tuple(folders)
