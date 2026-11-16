@@ -88,7 +88,8 @@ tests/
 ├── test_image_loader.py     # scanning, EXIF, corrupt files, preview bounds
 ├── test_logging_setup.py    # rotation, levels, namespace, log directory
 ├── test_sorter.py           # queue cursor, counters, undo, vanished files
-└── test_swipe_widget.py     # thresholds, drag maths, keyboard mapping (gui)
+├── test_swipe_card.py       # fit/aspect, drag maths, thresholds, badge, fly-out (gui)
+└── test_swipe_widget.py     # stage: image hand-off, signal forwarding (gui)
 ```
 
 Principles:

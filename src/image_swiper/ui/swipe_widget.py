@@ -1,47 +1,55 @@
-"""The swipeable image card.
+"""The swipe stage: hosts the card and turns gestures into session signals.
 
 Responsibility
-    Display exactly one image and turn pointer input into a discrete sorting
-    decision. ``SwipeWidget`` renders the preview pixmap (fit-to-area, preserved
-    aspect ratio, centred), follows the pointer while dragging, shows the
-    directional feedback overlay, and emits a signal when a gesture is
-    committed. It never touches the filesystem and never loads images itself.
+    Own the *area* the user drags in, not the gesture itself. ``SwipeWidget``
+    keeps one :class:`~image_swiper.ui.swipe_card.SwipeCard` centred and covering
+    the stage, hands it the next preview pixmap, and re-emits the card's
+    committed category together with the stage-level signals the main window
+    needs (empty deck, prefetch request). It never touches the filesystem and
+    never loads images itself; the session façade supplies pixmaps.
 
-Gesture state machine
-    IDLE ──press──▶ DRAGGING ──release below threshold──▶ SPRING_BACK ──▶ IDLE
-                        │
-                        ├──release past threshold──▶ COMMITTED
-                        └──key press──▶ COMMITTED (animated by the owner)
+Relationship to SwipeCard
+    The per-image behaviour is implemented in ``ui/swipe_card.py`` and is
+    deliberately self-contained: rendering, the drag state machine, the rotation
+    limits, the GOOD/BAD/GREAT/OK badge, the fly-out animation and the keyboard
+    map all live there, so the card can be demoed and tested on its own::
 
-    While ``DRAGGING`` the card is translated by the pointer delta and rotated
-    proportionally to the horizontal offset (capped, e.g. ±12°). The dominant
-    axis decides the direction: horizontal wins ties, vertical requires a larger
-    travel (configurable) so sideways flicks stay easy.
+        python -m image_swiper.ui.swipe_card
 
-Feedback
-    * Right drag → green tint + "GOOD" badge; left → red + "BAD";
-      up → blue + "GREAT"; down → amber + "OK".
-    * Opacity/rotation of the badge scales with drag progress, so the user can
-      see the pending decision before releasing.
-    * Threshold is a constructor argument with a 120 px default, and the
-      vertical threshold defaults to 100 px, so the UI can tune them later.
+    ``SwipeWidget`` adds what needs more than one image: sizing the stage,
+    swapping pixmaps after a commit (``set_pixmap`` re-arms the card),
+    requesting the next preview before the current one leaves, and forwarding
+    ``swiped`` to the window. It also owns the stage-level shortcuts so they
+    keep working when the card does not have focus.
 
 Planned public API
     class SwipeWidget(QWidget):
-        swipe_committed: pyqtSignal(str)           # category name
-        drag_progress_changed: pyqtSignal(float)   # -1.0 … 1.0, for the owner
-        def set_image(pixmap: QPixmap, *, caption: str = "") -> None
-        def clear_image(self) -> None
-        def reset_position(self, *, animated: bool = True) -> None
-        def play_fling_out(direction: str) -> None
+        swipe_committed: pyqtSignal(str)        # category name, forwarded
+        deck_depleted: pyqtSignal()             # no more images to show
+        def show_image(pixmap: QPixmap, *, caption: str = "") -> None
+        def clear(self) -> None
+        def is_empty(self) -> bool
+        def trigger_swipe(self, category: str) -> None
         def set_interactive(self, enabled: bool) -> None
+        @property
+        def card(self) -> SwipeCard
+
+Gesture rules (implemented by SwipeCard)
+    * IDLE → DRAGGING on press; release below the threshold springs back,
+      release past it flies out and emits the category.
+    * Translation follows the pointer; rotation is proportional to horizontal
+      travel and capped at 15°.
+    * Thresholds are ratios of the stage size: 25 % of the width horizontally,
+      20 % of the height vertically, so the gestures scale with the window.
+    * Feedback: right → green ``GOOD``, left → red ``BAD``, up → gold
+      ``GREAT``, down → blue ``OK``; opacity follows the drag progress.
 
 Accessibility / input
-    * Keys handled by the window, not the widget, so shortcuts keep working
-      when the card is not focused.
-    * Touchscreens work through synthetic mouse events; a future M4 addition is
-      ``QNativeGestureEvent`` support for touchpad flicks where the compositor
-      provides them.
+    * The card keeps focus and handles the arrow keys and WASD itself; the stage
+      duplicates them as window-level shortcuts so they work regardless of
+      focus.
+    * Touchscreens work through synthetic mouse events; ``QNativeGestureEvent``
+      support for touchpad flicks is a later addition.
 
 Not implemented yet (milestone M2).
 """

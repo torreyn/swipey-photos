@@ -1,9 +1,9 @@
 """GUI harness smoke test (milestone M0).
 
-The real widget tests arrive with ``ui/swipe_widget.py`` in M2. Until then this
-module keeps the documented headless command honest — it proves that PyQt6
-imports, that ``pytest-qt`` creates a ``QApplication`` for us, and that widgets
-can be constructed without a display:
+The widget-level tests live in ``tests/test_swipe_card.py`` (``ui/swipe_card.py``).
+This module keeps the documented headless command honest — it proves that
+PyQt6 imports, that ``pytest-qt`` creates a ``QApplication`` for us, and that
+widgets can be constructed without a display:
 
     QT_QPA_PLATFORM=offscreen pytest -q -m gui
 

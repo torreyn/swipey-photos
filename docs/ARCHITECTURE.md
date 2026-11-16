@@ -106,8 +106,9 @@ configuration file stays human-editable and greppable.
 | `__main__.py` | entry | argv, logging bootstrap, exit code | construct widgets |
 | `app.py` | composition | `QApplication`, dependency graph, lifecycle | contain business rules |
 | `ui/main_window.py` | UI | layout, actions/shortcuts, session presentation | read/decode files |
-| `ui/swipe_widget.py` | UI | card rendering, drag→direction, feedback overlay | touch the filesystem |
-| `ui/animator.py` | UI | fly-out/fly-in/spring-back timing | know about `Path` or config files |
+| `ui/swipe_card.py` | UI | one image: fit, drag maths, badge, fly-out, keys | know about folders, files or categories on disk |
+| `ui/swipe_widget.py` | UI | stage geometry, image hand-off, signal forwarding | touch the filesystem |
+| `ui/animator.py` | UI | fly-in/stage fades, shared timing and easing | know about `Path` or config files |
 | `ui/workers.py` | UI↔core | thread-pool adapters, signal marshalling | mutate widgets |
 | `core/folder_manager.py` | core | category folders, category validation, collision-free moves | know about Qt |
 | `core/image_loader.py` | core | scanning, validation, preview decode, EXIF | import Qt |
@@ -126,7 +127,8 @@ ImageSwiperApplication (app.py)
 ├── ImageLoader                 (core/image_loader.py)
 ├── QThreadPool                 (preview + scan jobs)
 └── MainWindow                  (ui/main_window.py)
-    ├── SwipeWidget             (ui/swipe_widget.py)
+    ├── SwipeWidget             (ui/swipe_widget.py)  — the stage
+    │   └── SwipeCard           (ui/swipe_card.py)    — one image
     ├── CardAnimator            (ui/animator.py)
     └── QStatusBar / actions / menus
 ```

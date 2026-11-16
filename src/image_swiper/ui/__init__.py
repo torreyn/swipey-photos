@@ -7,9 +7,12 @@ Responsibility
 
 Contains
     main_window.py   MainWindow: menus, toolbar, status bar, session wiring.
-    swipe_widget.py  SwipeWidget: renders the current image, tracks the drag,
-                     resolves it into a category and paints feedback.
-    animator.py      CardAnimator: fly-out, fly-in and spring-back animations.
+    swipe_card.py    SwipeCard: renders one image, owns the drag/rotation maths,
+                     paints the feedback badge and flies itself out on commit.
+    swipe_widget.py  SwipeWidget: the swipe stage that hosts the cards, feeds the
+                     next image and forwards committed categories.
+    animator.py      CardAnimator: deck-level choreography (fly-in of the next
+                     card) and the shared timing/easing table.
     workers.py       QRunnable/QObject adapters that call synchronous core
                      functions on a QThreadPool and deliver results via signals.
 

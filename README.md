@@ -37,10 +37,13 @@ into [`docs/assets/`](docs/assets/) and reference them here.*
 `v0.1.0` is a **core-only** release. The Qt-free business layer is implemented
 and tested — image loading with EXIF handling, the four-way sorter with undo,
 the folder manager, collision-safe file operations, JSON configuration and
-rotating logs (164 tests, green on Python 3.11–3.13 in CI). The UI layer
-(`app.py`, the widgets, the animator) and the CLI are still documented
+rotating logs (212 tests, green on Python 3.11–3.13 in CI). The swipe card
+widget (`ui/swipe_card.py`) now implements the drag physics, rotation,
+directional feedback, fly-out animation and arrow/WASD bindings, and can be run
+on its own with `python -m image_swiper.ui.swipe_card`. The rest of the UI
+(`app.py`, the stage widget, the animator) and the CLI are still documented
 placeholders, so `image-swiper` exits with `NotImplementedError` until the
-swipe UI lands. See the [roadmap](#roadmap) for what is next.
+window is wired up. See the [roadmap](#roadmap) for what is next.
 
 ---
 
@@ -286,8 +289,9 @@ image-swiper/
 │   ├── py.typed               # PEP 561 marker (type info ships with the wheel)
 │   ├── ui/                    # Qt-only layer (all PyQt6 imports live here)
 │   │   ├── main_window.py     # shell: menus, toolbar, status bar, session wiring
-│   │   ├── swipe_widget.py    # image card: rendering, drag, thresholds, badges
-│   │   ├── animator.py        # fly-out / fly-in / spring-back animations
+│   │   ├── swipe_card.py      # one image: drag, rotation, badge, fly-out (gui)
+│   │   ├── swipe_widget.py    # stage: hosts the card, feeds images, forwards swipes
+│   │   ├── animator.py        # fly-in / stage fades, shared timing table
 │   │   └── workers.py         # QRunnable adapters: scan, preview decode, move
 │   ├── core/                  # toolkit-agnostic logic (no Qt imports)
 │   │   ├── image_loader.py    # folder scanning, validation, decode, prefetch
@@ -325,7 +329,7 @@ imports with `ast` and fails on any Qt import below `ui/`. Details and rationale
 | --- | --- | --- |
 | **M0 — Scaffolding** | Layout, packaging, docs, module contracts, CI pipeline | ✅ done |
 | **M1 — Image pipeline** | `image_loader`, EXIF handling, prefetching, fixture tests | ✅ done |
-| **M2 — Swipe UI** | `swipe_widget`, `animator`, keyboard bindings, state machine | ⬜ planned |
+| **M2 — Swipe UI** | `swipe_card` (card, drag, badge, fly-out), `swipe_widget` stage, deck wiring, main window | 🟡 partial — the card is implemented |
 | **M3 — Sorting** | `folder_manager`, `sorter`, `file_ops`, collision handling | ✅ done |
 | **M4 — Comfort** | Undo, config UI, summary screen, logging, error reporting | 🟡 partial — undo, config and logging done |
 | **M5 — Distribution** | `.desktop` file, icons, AppImage/Flatpak, 1.0 | ⬜ planned |
