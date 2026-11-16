@@ -12,9 +12,11 @@ Composition
       stage (:class:`SwipeWidget`) and :class:`CompletionScreen`.
     * Header with ``"Image 3 of 47"`` and the folder path; footer with four
       buttons (Bad, OK, Good, Great) for users who prefer clicking to dragging.
-    * Menus: *File* → Open Folder (Ctrl+O), Undo Last (Ctrl+Z), Quit (Ctrl+Q);
-      *Help* → About. The status bar shows the source folder on the left and
-      live per-category counts plus the remaining images on the right.
+    * Menus: *File* → Open Folder (Ctrl+O), Rescan Folder (F5, Ctrl+R), Undo
+      Last (Ctrl+Z), Quit (Ctrl+Q); *View* → Full Screen (F11); *Help* →
+      Keyboard Shortcuts (F1, ?) and About. The status bar shows the source
+      folder on the left and live per-category counts plus the remaining images
+      on the right.
     * Window-level ``QAction`` shortcuts for the four categories (arrows and
       WASD) and Space to skip, so they work no matter which child has focus.
 
@@ -22,7 +24,9 @@ Session flow
     ``open_folder()`` → ``Sorter`` (stat-only scan) → decode the current preview
     → ``SwipeWidget.show_image()`` → the card emits ``swipe_committed`` →
     ``Sorter.categorize()`` → next preview … → ``Sorter.finished`` →
-    ``CompletionScreen``. Undo restores the file and returns to the stage.
+    ``CompletionScreen``. Undo restores the file and returns to the stage, and
+    ``rescan()`` picks up files added mid-session while keeping the counters and
+    the undo history.
 
 Error handling
     Every failure is logged and funnelled through :meth:`_report_info`,
@@ -48,7 +52,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from PIL import Image
-from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtCore import QEvent, QSize, Qt
 from PyQt6.QtGui import QAction, QCloseEvent, QFont, QImage, QKeySequence, QPixmap
 from PyQt6.QtWidgets import (
     QFileDialog,
@@ -87,6 +91,7 @@ from ..utils.file_ops import FileOperationError
 from ..utils.logging_setup import get_logger
 from .branding import APP_DISPLAY_NAME, TAGLINE
 from .completion_screen import CompletionScreen
+from .shortcut_overlay import ShortcutOverlay
 from .swipe_card import CATEGORY_COLORS
 from .swipe_widget import SwipeWidget
 from .welcome_screen import WelcomeScreen
@@ -126,6 +131,29 @@ CATEGORY_HINTS: dict[str, str] = {
     "Great": "↑ or W",
 }
 """Short human hints reused in button tooltips."""
+
+RESCAN_SHORTCUTS: tuple[QKeySequence, ...] = (
+    QKeySequence(Qt.Key.Key_F5),
+    QKeySequence("Ctrl+R"),
+)
+"""Keys that rescan the current folder for files added mid-session."""
+
+FULLSCREEN_SHORTCUTS: tuple[QKeySequence, ...] = (QKeySequence(Qt.Key.Key_F11),)
+"""Key that toggles the distraction-free full-screen view."""
+
+SHORTCUT_HELP_SHORTCUTS: tuple[QKeySequence, ...] = (
+    QKeySequence(Qt.Key.Key_F1),
+    QKeySequence("?"),
+)
+"""Keys that show the :class:`ShortcutOverlay` reference."""
+
+QUIT_SHORTCUTS: tuple[QKeySequence, ...] = (QKeySequence("Ctrl+Q"),)
+"""Key that closes the window.
+
+``QKeySequence.StandardKey.Quit`` is empty outside macOS — Qt maps it to
+``Cmd+Q`` only — so the Linux shortcut is spelled out instead of silently
+binding nothing.
+"""
 
 SorterFactory = Callable[[Path], Sorter]
 """Builds a session sorter for a folder; injectable for tests and future modes."""
@@ -213,7 +241,8 @@ class MainWindow(QMainWindow):
         self._sorter_factory: SorterFactory = sorter_factory
         self._sorter: Sorter | None = None
         self._busy = False
-        self._skipped = 0
+        self._unreadable: set[Path] = set()
+        self._shortcut_overlay: ShortcutOverlay | None = None
         self._category_actions: dict[str, QAction] = {}
         self._category_buttons: dict[str, QPushButton] = {}
 
@@ -334,6 +363,14 @@ class MainWindow(QMainWindow):
         self._open_action.triggered.connect(self._choose_folder)
         file_menu.addAction(self._open_action)
 
+        self._rescan_action = QAction("&Rescan Folder", self)
+        self._rescan_action.setObjectName("action_rescan")
+        self._rescan_action.setShortcuts(list(RESCAN_SHORTCUTS))
+        self._rescan_action.setStatusTip("Scan the current folder again for new images")
+        self._rescan_action.setEnabled(False)
+        self._rescan_action.triggered.connect(self._on_rescan)
+        file_menu.addAction(self._rescan_action)
+
         self._undo_action = QAction("&Undo Last", self)
         self._undo_action.setObjectName("action_undo")
         self._undo_action.setShortcut(QKeySequence.StandardKey.Undo)
@@ -345,13 +382,30 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         self._quit_action = QAction("&Quit", self)
         self._quit_action.setObjectName("action_quit")
-        self._quit_action.setShortcut(QKeySequence.StandardKey.Quit)
+        self._quit_action.setShortcuts(list(QUIT_SHORTCUTS))
         self._quit_action.setStatusTip("Close ImageSwiper (window state is saved)")
         self._quit_action.triggered.connect(self.close)
         file_menu.addAction(self._quit_action)
 
+        view_menu = QMenu("&View", self._menu_bar)
+        self._menu_bar.addMenu(view_menu)
+        self._fullscreen_action = QAction("&Full Screen", self)
+        self._fullscreen_action.setObjectName("action_fullscreen")
+        self._fullscreen_action.setShortcuts(list(FULLSCREEN_SHORTCUTS))
+        self._fullscreen_action.setCheckable(True)
+        self._fullscreen_action.setStatusTip("Hide the window chrome and the menus")
+        self._fullscreen_action.triggered.connect(self._toggle_fullscreen)
+        view_menu.addAction(self._fullscreen_action)
+
         help_menu = QMenu("&Help", self._menu_bar)
         self._menu_bar.addMenu(help_menu)
+        self._shortcuts_action = QAction("&Keyboard Shortcuts", self)
+        self._shortcuts_action.setObjectName("action_shortcut_help")
+        self._shortcuts_action.setShortcuts(list(SHORTCUT_HELP_SHORTCUTS))
+        self._shortcuts_action.setStatusTip("Show every keyboard binding")
+        self._shortcuts_action.triggered.connect(self._show_shortcut_help)
+        help_menu.addAction(self._shortcuts_action)
+        help_menu.addSeparator()
         self._about_action = QAction(f"&About {APP_DISPLAY_NAME}", self)
         self._about_action.setObjectName("action_about")
         self._about_action.setStatusTip("Version and a short description")
@@ -425,6 +479,11 @@ class MainWindow(QMainWindow):
         return self._swipe
 
     @property
+    def shortcut_overlay(self) -> ShortcutOverlay | None:
+        """The keyboard reference overlay, or ``None`` until it is first shown."""
+        return self._shortcut_overlay
+
+    @property
     def category_actions(self) -> dict[str, QAction]:
         """The four keyboard actions, keyed by canonical category name."""
         return dict(self._category_actions)
@@ -479,7 +538,7 @@ class MainWindow(QMainWindow):
             return False
 
         self._sorter = sorter
-        self._skipped = 0
+        self._unreadable.clear()
         self._busy = False
         self._remember_folder(sorter.source_folder)
         self.setWindowTitle(f"{APP_DISPLAY_NAME} — {sorter.source_folder.name}")
@@ -512,7 +571,7 @@ class MainWindow(QMainWindow):
         Configuration problems are logged and shown in the status bar instead of
         raising: a read-only home directory must not block closing the app.
         """
-        size = self.size()
+        size = self._saved_window_size()
         self._config = replace(
             self._config,
             window=WindowConfig(width=max(size.width(), 1), height=max(size.height(), 1)),
@@ -520,6 +579,19 @@ class MainWindow(QMainWindow):
         if self._sorter is not None:
             self._config = with_recent_folder(self._config, self._sorter.source_folder)
         self._save_config()
+
+    def _saved_window_size(self) -> QSize:
+        """Return the size worth remembering, never a full-screen one.
+
+        Closing the app in full screen must not teach the next launch to open a
+        screen-sized window, so the normal geometry wins whenever the window is
+        full screen or maximised.
+        """
+        if self.isFullScreen() or self.isMaximized():
+            normal = self.normalGeometry()
+            if normal.isValid() and normal.width() > 0 and normal.height() > 0:
+                return normal.size()
+        return self.size()
 
     def show_status_message(self, message: str, timeout_ms: int = 5000) -> None:
         """Show *message* in the status bar for *timeout_ms* milliseconds."""
@@ -556,7 +628,7 @@ class MainWindow(QMainWindow):
                 image, original_size = sorter.image_loader.load_preview(path)
             except ImageLoaderError as exc:
                 LOGGER.warning("skipping undecodable image %s: %s", path, exc)
-                self._skipped += 1
+                self._unreadable.add(path)
                 self._report_warning(
                     "Image skipped",
                     f"{path.name} could not be read and was skipped.\n\n{exc}",
@@ -641,7 +713,7 @@ class MainWindow(QMainWindow):
         counts = {str(name): count for name, count in sorter.counts.items()} if sorter else {}
         source = sorter.source_folder if sorter is not None else None
         self._swipe.clear()
-        self._completion.set_summary(counts, source_folder=source, skipped=self._skipped)
+        self._completion.set_summary(counts, source_folder=source, skipped=len(self._unreadable))
         self._show_page(PAGE_COMPLETION)
         LOGGER.info("session finished: %s", counts)
 
@@ -702,6 +774,7 @@ class MainWindow(QMainWindow):
         self._undo_action.setEnabled(
             self._sorter is not None and bool(self._sorter.history) and not self._busy
         )
+        self._rescan_action.setEnabled(self._sorter is not None and not self._busy)
 
     # ------------------------------------------------------------------
     # User intent
@@ -741,6 +814,65 @@ class MainWindow(QMainWindow):
             self._show_page(PAGE_WELCOME)
             return
         self.open_folder(sorter.source_folder)
+
+    def _on_rescan(self) -> None:
+        """Scan the current folder again, keeping counts and undo history.
+
+        ``Sorter.reload()`` re-reads the folder without touching the counters,
+        so files added since the session started appear and files already moved
+        (now inside a category folder) are not queued twice. When nothing is left
+        the summary replaces the stage, which is what the user is about to see
+        anyway.
+        """
+        sorter = self._sorter
+        if sorter is None:
+            self._choose_folder()
+            return
+        if self._busy:
+            return
+        try:
+            remaining = sorter.reload()
+        except (ImageLoaderError, OSError) as exc:
+            LOGGER.warning("cannot rescan %s: %s", sorter.source_folder, exc)
+            self._report_error("Could not rescan folder", f"{sorter.source_folder}\n\n{exc}")
+            return
+
+        LOGGER.info("rescanned %s: %d image(s) left", sorter.source_folder, len(remaining))
+        if not remaining:
+            self.show_status_message(f"No images left in {sorter.source_folder.name}", 5000)
+            self._show_completion()
+            return
+        self._show_page(PAGE_STAGE)
+        self._load_current_image()
+        self.show_status_message(f"Rescanned: {len(remaining)} image(s) left", 4000)
+
+    # ------------------------------------------------------------------
+    # View and help
+    # ------------------------------------------------------------------
+
+    def _toggle_fullscreen(self) -> None:
+        """Switch between full screen and the normal window frame."""
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
+        LOGGER.debug("full screen %s", "on" if self.isFullScreen() else "off")
+
+    def _sync_fullscreen_action(self) -> None:
+        """Keep the View menu tick in step with the actual window state."""
+        self._fullscreen_action.setChecked(self.isFullScreen())
+
+    def changeEvent(self, event: QEvent | None) -> None:
+        """Keep the Full Screen tick correct when the window manager changes it."""
+        super().changeEvent(event)
+        if event is not None and event.type() == QEvent.Type.WindowStateChange:
+            self._sync_fullscreen_action()
+
+    def _show_shortcut_help(self) -> None:
+        """Show the keyboard reference overlay, creating it on first use."""
+        if self._shortcut_overlay is None:
+            self._shortcut_overlay = ShortcutOverlay(self)
+        self._shortcut_overlay.show_overlay()
 
     def _remember_folder(self, folder: Path) -> None:
         """Record *folder* as the most recent one and persist the config."""

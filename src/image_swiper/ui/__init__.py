@@ -13,6 +13,8 @@ Contains
                         most recent folders.
     completion_screen.py CompletionScreen: per-category summary with restart,
                         pick-another-folder and quit actions.
+    shortcut_overlay.py ShortcutOverlay: the F1/? reference grid of every
+                        keyboard binding, built from one table.
     swipe_card.py       SwipeCard: renders one image, owns the drag/rotation
                         maths, paints the feedback badge, flies itself out.
     swipe_widget.py     SwipeWidget/CardStage: the stage that hosts the card,

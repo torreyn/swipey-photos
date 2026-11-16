@@ -9,7 +9,9 @@ Coverage
       move is in flight;
     * error paths: an undecodable image is reported and skipped, a failed move
       keeps the image queued, a vanished image is dropped with a warning;
-    * the live progress label and the status-bar counters.
+    * the live progress label and the status-bar counters;
+    * the shortcut surface: rescan (F5/Ctrl+R), full screen (F11), the F1/`?`
+      reference overlay, and that every bound key is documented in it.
 
 Conventions
     * The window is always built with an explicit ``config_path`` under
@@ -624,3 +626,179 @@ def test_default_sorter_factory_scans_without_decoding(
     sorter = default_sorter_factory(tmp_path)
 
     assert sorter.total == 2
+
+
+# ----------------------------------------------------------------------
+# Shortcuts: rescan, full screen and the reference overlay
+# ----------------------------------------------------------------------
+
+
+def test_rescan_picks_up_images_added_mid_session(
+    qtbot: QtBot,
+    window: Callable[..., MainWindow],
+    sample_folder: Path,
+    make_images: Callable[..., list[Path]],
+) -> None:
+    """F5/Ctrl+R rescans without losing counters or the undo history."""
+    created = window()
+    created.open_folder(sample_folder)
+    commit(qtbot, created, "Good")
+    make_images(sample_folder, count=1, prefix="LATE_", start=9)
+    rescan = created.findChild(QAction, "action_rescan")
+    assert rescan is not None and rescan.isEnabled()
+
+    rescan.trigger()
+
+    sorter = created.sorter
+    assert sorter is not None
+    assert created.current_page == "stage"
+    assert sorter.remaining_count == 3
+    assert sorter.total == 4
+    assert sorter.counts == {"Good": 1}
+    assert created.progress_label.text() == "Image 2 of 4"
+    assert "Good 1" in created.status_counts_label.text()
+    assert "3 left" in created.status_counts_label.text()
+    assert "Rescanned: 3 image(s) left" in created.statusBar().currentMessage()
+    undo = created.findChild(QAction, "action_undo")
+    assert undo is not None and undo.isEnabled()
+
+
+def test_rescan_with_nothing_left_shows_the_summary(
+    qtbot: QtBot,
+    window: Callable[..., MainWindow],
+    make_images: Callable[..., list[Path]],
+    tmp_path: Path,
+) -> None:
+    """Rescanning a drained folder keeps the summary instead of a blank stage."""
+    folder = tmp_path / "drained"
+    make_images(folder, count=1)
+    created = window()
+    created.open_folder(folder)
+    commit(qtbot, created, "OK")
+    assert created.current_page == "completion"
+
+    rescan = created.findChild(QAction, "action_rescan")
+    assert rescan is not None
+    rescan.trigger()
+
+    assert created.current_page == "completion"
+    assert created.completion_screen.headline.text() == "All done! 1 image sorted"
+    assert "No images left" in created.statusBar().currentMessage()
+
+
+def test_rescan_does_not_double_count_unreadable_images(
+    window: Callable[..., MainWindow],
+    dialogs: list[tuple[str, str, str]],
+    make_images: Callable[..., list[Path]],
+    tmp_path: Path,
+) -> None:
+    """A file that cannot be decoded stays one skipped image after a rescan."""
+    folder = tmp_path / "corrupt"
+    make_images(folder, count=1, corrupt=True)
+    created = window()
+    created.open_folder(folder)
+    note = created.completion_screen.findChild(QWidget, "completion_skipped")
+    assert note is not None and note.text().startswith("1 image")
+
+    rescan = created.findChild(QAction, "action_rescan")
+    assert rescan is not None
+    rescan.trigger()
+
+    assert note.text().startswith("1 image")
+    assert [kind for kind, _title, _message in dialogs] == ["warning", "warning"]
+
+
+def test_rescan_is_disabled_without_a_session(window: Callable[..., MainWindow]) -> None:
+    """There is nothing to rescan on the welcome page, so the action is off."""
+    created = window()
+
+    rescan = created.findChild(QAction, "action_rescan")
+
+    assert rescan is not None and not rescan.isEnabled()
+
+
+def test_fullscreen_action_toggles_the_window_state(
+    qtbot: QtBot, window: Callable[..., MainWindow]
+) -> None:
+    """F11 hides the chrome and comes back on the second press."""
+    created = window()
+    fullscreen = created.findChild(QAction, "action_fullscreen")
+    assert fullscreen is not None and fullscreen.isCheckable()
+
+    fullscreen.trigger()
+    qtbot.waitUntil(created.isFullScreen, timeout=2000)
+
+    assert fullscreen.isChecked()
+
+    fullscreen.trigger()
+    qtbot.waitUntil(lambda: not created.isFullScreen(), timeout=2000)
+
+    assert not fullscreen.isChecked()
+
+
+def test_save_state_remembers_the_normal_size_in_full_screen(
+    window: Callable[..., MainWindow], tmp_path: Path
+) -> None:
+    """Closing in full screen must not persist a screen-sized window."""
+    created = window()
+    created.resize(700, 560)
+    created.showFullScreen()
+
+    created.save_state()
+
+    saved = load_config(tmp_path / "config.json")
+    assert saved.window == WindowConfig(width=700, height=560)
+
+
+def test_documented_shortcuts_match_the_actions(window: Callable[..., MainWindow]) -> None:
+    """Every documented key is bound, and the overlay documents it back."""
+    created = window()
+    expected = {
+        "action_open_folder": ["Ctrl+O"],
+        "action_rescan": ["F5", "Ctrl+R"],
+        "action_undo": ["Ctrl+Z"],
+        "action_quit": ["Ctrl+Q"],
+        "action_fullscreen": ["F11"],
+        "action_shortcut_help": ["F1", "?"],
+    }
+    for name, keys in expected.items():
+        action = created.findChild(QAction, name)
+        assert action is not None, name
+        assert [sequence.toString() for sequence in action.shortcuts()] == keys
+
+    created.findChild(QAction, "action_shortcut_help").trigger()  # type: ignore[union-attr]
+    overlay = created.shortcut_overlay
+    assert overlay is not None
+    documented = overlay.keys_text()
+    for keys in expected.values():
+        for key in keys:
+            assert key in documented, f"{key} is bound but not documented"
+    assert "Space" in documented
+
+
+def test_quit_is_bound_on_linux(window: Callable[..., MainWindow]) -> None:
+    """``StandardKey.Quit`` is empty on Linux, so Ctrl+Q must be spelled out."""
+    created = window()
+
+    quit_action = created.findChild(QAction, "action_quit")
+
+    assert quit_action is not None
+    assert [sequence.toString() for sequence in quit_action.shortcuts()] == ["Ctrl+Q"]
+
+
+def test_shortcut_help_reuses_one_overlay(qtbot: QtBot, window: Callable[..., MainWindow]) -> None:
+    """The window builds the overlay once and keeps it for the whole session."""
+    created = window()
+    action = created.findChild(QAction, "action_shortcut_help")
+    assert action is not None
+    assert created.shortcut_overlay is None
+
+    action.trigger()
+    first = created.shortcut_overlay
+    assert first is not None
+    qtbot.waitUntil(first.isVisible, timeout=2000)
+
+    action.trigger()
+
+    assert created.shortcut_overlay is first
+    assert first.isVisible()

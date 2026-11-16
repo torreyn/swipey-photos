@@ -109,6 +109,7 @@ configuration file stays human-editable and greppable.
 | `__main__.py` | entry | argv, logging bootstrap, exit code | construct widgets |
 | `app.py` | composition | `QApplication`, dependency graph, lifecycle | contain business rules |
 | `ui/main_window.py` | UI | layout, actions/shortcuts, session presentation | read/decode files |
+| `ui/shortcut_overlay.py` | UI | shortcut reference grid, key-cap styling | read session state or files |
 | `ui/swipe_card.py` | UI | one image: fit, drag maths, badge, fly-out, keys | know about folders, files or categories on disk |
 | `ui/swipe_widget.py` | UI | stage geometry, image hand-off, signal forwarding | touch the filesystem |
 | `ui/animator.py` | UI | fly-in/stage fades, shared timing and easing | know about `Path` or config files |
@@ -178,6 +179,9 @@ itself. Its slots translate UI intent into core calls:
 | `WelcomeScreen.folder_selected(str)` | `open_folder()`: build the sorter, remember the folder, show the first preview |
 | `SwipeWidget.swipe_committed(str)` | guard `_busy`; `Sorter.categorize()`; report or skip on failure; load the next preview or show the summary |
 | category `QAction` (arrows/WASD) or footer button | `SwipeWidget.trigger_swipe(category)`, so keyboard, click and drag share the card's fly-out |
+| `File → Rescan Folder` (F5, Ctrl+R) | `Sorter.reload()`, which re-reads the folder and keeps the counters and undo history; empty means the summary |
+| `View → Full Screen` (F11) | `showFullScreen()`/`showNormal()`, with the menu tick resynchronised in `changeEvent` |
+| `Help → Keyboard Shortcuts` (F1, ?) | `ShortcutOverlay.show_overlay()`, one reused non-modal dialog |
 | `File → Undo Last` (Ctrl+Z) | `Sorter.undo()`, re-show the restored image, return to the stage |
 | skip `QAction` (Space) | `Sorter.advance()`; the file stays in the folder |
 | `CompletionScreen.open_source_requested` | rescan the same folder |
@@ -186,13 +190,20 @@ itself. Its slots translate UI intent into core calls:
 
 Preconditions are enforced in the window: `_can_decide()` is false while a move
 is in flight, on the welcome/summary pages, or when the deck is empty, and the
-actions and footer buttons are disabled accordingly. A second decision during
-the ~250 ms fly-out is dropped by the card itself, so the same file can never be
-moved twice.
+actions and footer buttons are disabled accordingly. Rescan is enabled whenever a
+session exists and no move is in flight. A second decision during the ~250 ms
+fly-out is dropped by the card itself, so the same file can never be moved twice.
 
 Every failure is logged and routed through `_report_info`, `_report_warning` or
 `_report_error` — the only methods that open a `QMessageBox`, and therefore the
 seam that offscreen tests replace.
+
+Shortcut hygiene worth knowing: `QKeySequence.StandardKey.Quit` is **empty**
+outside macOS, so File → Quit binds `Ctrl+Q` explicitly; the rest of the table
+comes from `StandardKey.Open`/`Undo` plus literal sequences. `SHORTCUT_GROUPS` in
+`ui/shortcut_overlay.py` is the documentation table, and
+`tests/test_main_window.py` asserts that every bound `QAction` shortcut appears
+in it, so a new binding cannot ship undocumented.
 
 **`SwipeWidget`** is the stage: a `CardStage` that assigns the card geometry in
 `resizeEvent` (the card cannot live in a layout because it moves itself), plus a
@@ -205,6 +216,14 @@ touches no files.
 reports a chosen folder and lists at most five recents; the summary renders the
 per-category counts it is given and emits restart/pick/quit. Neither reads the
 sorter or the configuration directly.
+
+**`ShortcutOverlay`** is the F1/`?` reference page: a non-modal `QDialog` that
+renders `SHORTCUT_GROUPS` — group headings, key caps and one-line descriptions —
+from a single table. It owns no session state, so the window builds it lazily and
+reuses that instance; `show_overlay()` raises an already-visible overlay instead
+of stacking copies, and Close/Esc only hide it. Key caps and headings use palette
+roles, so the overlay stays legible in light and dark themes without hard-coding
+colours.
 
 The diagram below is `SwipeCard`'s internal state machine (`ui/swipe_card.py`),
 where pointer handling, thresholds, rotation and the badge live:

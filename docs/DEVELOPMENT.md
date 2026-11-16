@@ -93,7 +93,8 @@ tests/
 ├── test_swipe_widget.py     # stage: image hand-off, caption, signal forwarding (gui)
 ├── test_welcome_screen.py   # picker, recent-folder list, emit rules (gui)
 ├── test_completion_screen.py # summary text, counts, button signals (gui)
-├── test_main_window.py      # three-page flow, moves, undo, errors, config (gui)
+├── test_main_window.py      # three-page flow, moves, undo, rescan, full screen (gui)
+├── test_shortcut_overlay.py # shortcut table, key caps, reuse, Esc (gui)
 └── test_app.py              # CLI flags, run(), identity and icon (gui)
 ```
 

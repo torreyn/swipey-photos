@@ -43,10 +43,10 @@ configuration and rotating logs. The Qt side is wired up too: the swipe card
 the welcome screen with recent folders, the completion summary and the main
 window (menus, progress, footer buttons, status bar, config persistence). You
 can start it with `python -m image_swiper` or the installed `image-swiper`
-script and sort a folder end to end (284 tests, green on Python 3.11–3.13 in
-CI). Deck fly-in animation, background scanning/prefetch and the shortcut
-overlay are the remaining polish items. See the [roadmap](#roadmap) for what is
-next.
+script and sort a folder end to end (301 tests, green on Python 3.11–3.13 in
+CI). Deck fly-in animation and background scanning/prefetch are the remaining
+polish items; rescan (F5/Ctrl+R), full screen (F11) and the F1/`?` shortcut
+overlay have landed. See the [roadmap](#roadmap) for what is next.
 
 ---
 
@@ -348,7 +348,7 @@ imports with `ast` and fails on any Qt import below `ui/`. Details and rationale
 | **M1 — Image pipeline** | `image_loader`, EXIF handling, prefetching, fixture tests | ✅ done |
 | **M2 — Swipe UI** | `swipe_card` (card, drag, badge, fly-out), `swipe_widget` stage, main window, welcome/summary pages | ✅ done — deck fly-in (`animator`) remains |
 | **M3 — Sorting** | `folder_manager`, `sorter`, `file_ops`, collision handling | ✅ done |
-| **M4 — Comfort** | Undo, config UI, summary screen, logging, error reporting | 🟡 partial — undo, config, logging, summary and error dialogs done; shortcut overlay and background workers remain |
+| **M4 — Comfort** | Undo, config UI, summary screen, logging, error reporting, rescan/full-screen/shortcut keys, shortcut overlay | 🟡 partial — everything except background workers is done; decode, scan and move still run on the GUI thread |
 | **M5 — Distribution** | `.desktop` file, icons, AppImage/Flatpak, 1.0 | ⬜ planned |
 
 ---
