@@ -44,10 +44,10 @@ dev = [
 image-swiper = "image_swiper.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/your-org/image-swiper"
-Documentation = "https://github.com/your-org/image-swiper/tree/main/docs"
-Issues = "https://github.com/your-org/image-swiper/issues"
-Source = "https://github.com/your-org/image-swiper"
+Homepage = "https://github.com/torreyn/image-swiper"
+Documentation = "https://github.com/torreyn/image-swiper/tree/main/docs"
+Issues = "https://github.com/torreyn/image-swiper/issues"
+Source = "https://github.com/torreyn/image-swiper"
 
 [tool.hatch.version]
 path = "src/image_swiper/__init__.py"

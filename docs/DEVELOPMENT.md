@@ -23,7 +23,7 @@ Missing `libxcb-cursor0` produces the classic
 ## 2. First-run setup
 
 ```bash
-git clone https://github.com/your-org/image-swiper.git
+git clone https://github.com/torreyn/image-swiper.git
 cd image-swiper
 python3 -m venv .venv
 source .venv/bin/activate

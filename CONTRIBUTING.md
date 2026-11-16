@@ -25,7 +25,7 @@ Be kind, assume good intent, and critique code — not people.
 ## Development setup
 
 ```bash
-git clone https://github.com/your-org/image-swiper.git
+git clone https://github.com/torreyn/image-swiper.git
 cd image-swiper
 
 python3 -m venv .venv

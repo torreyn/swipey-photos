@@ -145,7 +145,7 @@ sudo pacman -S --needed python python-pip python-virtualenv \
 ### 2. Clone and create a virtual environment
 
 ```bash
-git clone https://github.com/your-org/image-swiper.git
+git clone https://github.com/torreyn/image-swiper.git
 cd image-swiper
 
 python3 -m venv .venv
