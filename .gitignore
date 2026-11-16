@@ -1,0 +1,106 @@
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+.Python
+
+# Byte-compiled / optimized / DLL files produced by tooling
+*.pyo
+*.pdb
+
+# Packaging / build artefacts
+build/
+dist/
+sdist/
+wheels/
+*.egg-info/
+*.egg
+.eggs/
+MANIFEST
+pip-wheel-metadata/
+share/python-wheels/
+.installed.cfg
+*.manifest
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.python-version
+.pipx/
+
+# Test / coverage / type-check caches
+.pytest_cache/
+.cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.ruff_cache/
+
+# ---------------------------------------------------------------------------
+# PyQt / Qt
+# ---------------------------------------------------------------------------
+*.qm
+*.qmlc
+*.jsc
+.qmlproject.user
+*.qrc.py
+qt.conf
+.qmake.stash
+*.pro.user
+*.pro.user.*
+moc_*.py
+qrc_*.py
+*.ts
+
+# Qt / XDG runtime droppings when running from the repo
+.qt/
+*.qmltypes
+qmlcache/
+
+# ---------------------------------------------------------------------------
+# Application runtime data (local manual testing only)
+# ---------------------------------------------------------------------------
+# Never commit sample photo libraries or the local config/state/logs
+sample-images/
+test-images/
+*.log
+
+# ---------------------------------------------------------------------------
+# VSCode / editors
+# ---------------------------------------------------------------------------
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+*.code-workspace
+.idea/
+*.swp
+*.swo
+*~
+\#*\#
+.\#*
+
+# ---------------------------------------------------------------------------
+# Linux desktop / OS noise
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+.directory
+*.desktop.local
+*.AppImage

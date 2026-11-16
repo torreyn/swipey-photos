@@ -1,0 +1,19 @@
+# ImageSwiper runtime requirements.
+#
+# These pins intentionally mirror the `[project].dependencies` table in
+# pyproject.toml, which is the single source of truth for packaging.
+# This file exists for people who prefer a plain `pip install -r` workflow
+# and for reproducible Linux builds.
+#
+# For an editable install with dev tooling, use instead:
+#     pip install -e ".[dev]"
+#
+# Qt platform packages (libgl1, libxcb-cursor0, ...) are OS packages, not
+# Python packages. See README.md -> "Installation" for the apt/dnf/pacman
+# commands.
+
+# Qt 6 bindings used by the UI layer
+PyQt6>=6.6,<7
+
+# Image validation, EXIF orientation handling and thumbnail decoding
+Pillow>=10.0,<12

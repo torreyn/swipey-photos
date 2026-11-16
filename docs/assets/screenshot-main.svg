@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="1200" height="760" role="img" aria-labelledby="title desc">
+  <title id="title">ImageSwiper main window — placeholder mock-up</title>
+  <desc id="desc">Mock-up of the ImageSwiper window: a photo card in the centre with BAD, GOOD, GREAT and OK badges around it, a progress header and a keyboard hint bar.</desc>
+
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2b3f63"/>
+      <stop offset="55%" stop-color="#6d5a7c"/>
+      <stop offset="100%" stop-color="#c98a6b"/>
+    </linearGradient>
+    <clipPath id="cardClip">
+      <rect x="360" y="150" width="480" height="400" rx="16"/>
+    </clipPath>
+    <filter id="cardShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="760" fill="#0f1116"/>
+
+  <!-- window chrome -->
+  <rect x="60" y="40" width="1080" height="680" rx="14" fill="#1b1e25" stroke="#2d323d" stroke-width="2"/>
+  <rect x="60" y="40" width="1080" height="46" rx="14" fill="#22262f"/>
+  <rect x="60" y="70" width="1080" height="16" fill="#22262f"/>
+  <circle cx="88" cy="63" r="6" fill="#ff5f57"/>
+  <circle cx="110" cy="63" r="6" fill="#febc2e"/>
+  <circle cx="132" cy="63" r="6" fill="#28c840"/>
+  <text x="170" y="69" font-family="sans-serif" font-size="15" fill="#9aa4b2">ImageSwiper — ~/Pictures/unsorted</text>
+
+  <!-- header -->
+  <text x="100" y="122" font-family="sans-serif" font-size="15" fill="#c8d0da">Sorting 12 of 340</text>
+  <rect x="100" y="136" width="1000" height="6" rx="3" fill="#2b303a"/>
+  <rect x="100" y="136" width="188" height="6" rx="3" fill="#5b9df9"/>
+
+  <!-- stacked cards behind the active one -->
+  <rect x="386" y="176" width="440" height="380" rx="16" fill="#2a2f39" opacity="0.55"/>
+  <rect x="374" y="164" width="460" height="390" rx="16" fill="#323844" opacity="0.8"/>
+
+  <!-- active card with a generated "photo" -->
+  <g filter="url(#cardShadow)">
+    <rect x="360" y="150" width="480" height="400" rx="16" fill="#10131a"/>
+  </g>
+  <g clip-path="url(#cardClip)">
+    <rect x="360" y="150" width="480" height="400" fill="url(#sky)"/>
+    <circle cx="700" cy="250" r="42" fill="#ffd79a" opacity="0.9"/>
+    <polygon points="360,470 470,320 560,470" fill="#1f2a3a"/>
+    <polygon points="500,470 620,280 760,470" fill="#16202e"/>
+    <polygon points="690,470 800,340 840,470" fill="#22304a"/>
+    <rect x="360" y="440" width="480" height="110" fill="#101a26" opacity="0.75"/>
+    <text x="384" y="520" font-family="sans-serif" font-size="17" fill="#e8edf4" opacity="0.85">DSC_0412.jpg</text>
+    <text x="384" y="542" font-family="sans-serif" font-size="13" fill="#b9c4d2" opacity="0.8">4032 × 3024 · 3.8 MB</text>
+  </g>
+  <rect x="360" y="150" width="480" height="400" rx="16" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2"/>
+
+  <!-- direction badges -->
+  <g font-family="sans-serif" font-weight="bold" font-size="20" letter-spacing="2">
+    <text x="250" y="358" fill="#ff6b6b" text-anchor="middle">◀ BAD</text>
+    <text x="950" y="358" fill="#57d98b" text-anchor="middle">GOOD ▶</text>
+    <text x="600" y="118" fill="#6fb6ff" text-anchor="middle">▲ GREAT</text>
+    <text x="600" y="596" fill="#ffc46b" text-anchor="middle">▼ OK</text>
+  </g>
+
+  <!-- footer hint -->
+  <text x="600" y="654" font-family="sans-serif" font-size="14" fill="#8b95a5" text-anchor="middle">
+    Drag the photo, or use ← → ↑ ↓ / WASD · Ctrl+Z to undo · Ctrl+O to open a folder
+  </text>
+  <text x="600" y="690" font-family="sans-serif" font-size="12" fill="#5d6675" text-anchor="middle">
+    Placeholder mock-up — replace with docs/assets/screenshot-main.png
+  </text>
+</svg>

@@ -1,0 +1,107 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "image-swiper"
+dynamic = ["version"]
+description = "Sort images in a folder with Tinder-style swipe gestures on Linux."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "ImageSwiper contributors" }]
+keywords = ["images", "photos", "sorting", "culling", "pyqt6", "qt", "linux", "desktop"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Environment :: X11 Applications :: Qt",
+  "Intended Audience :: End Users/Desktop",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Multimedia :: Graphics :: Viewers",
+  "Topic :: Utilities",
+  "Typing :: Typed",
+]
+dependencies = [
+  "PyQt6>=6.6,<7",
+  "Pillow>=10.0,<12",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+  "pytest-qt>=4.4",
+  "ruff>=0.5",
+  "mypy>=1.10",
+  "build>=1.2",
+]
+
+[project.scripts]
+image-swiper = "image_swiper.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/your-org/image-swiper"
+Documentation = "https://github.com/your-org/image-swiper/tree/main/docs"
+Issues = "https://github.com/your-org/image-swiper/issues"
+Source = "https://github.com/your-org/image-swiper"
+
+[tool.hatch.version]
+path = "src/image_swiper/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/image_swiper"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src",
+  "/tests",
+  "/docs",
+  "/README.md",
+  "/LICENSE",
+  "/CONTRIBUTING.md",
+  "/pyproject.toml",
+  "/requirements.txt",
+]
+
+# ---------------------------------------------------------------------------
+# Tooling configuration
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+extend-exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+  # Line length is enforced by `ruff format`, not the linter.
+  "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B018"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra --strict-markers"
+markers = [
+  "gui: tests that construct Qt widgets (run with QT_QPA_PLATFORM=offscreen)",
+  "integration: tests that touch the real filesystem beyond tmp_path helpers",
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src/image_swiper"]
+warn_unreachable = true
