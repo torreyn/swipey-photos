@@ -180,7 +180,7 @@ pip install -e .            # optional: gives you the `image-swiper` command
 
 ```bash
 python -c "import image_swiper; print(image_swiper.__version__)"
-image-swiper --version      # once the CLI milestone lands
+image-swiper --version      # prints "ImageSwiper 0.1.0"
 ```
 
 > **Flatpak / AppImage:** not packaged yet. The app has no runtime dependency
