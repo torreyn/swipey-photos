@@ -321,12 +321,12 @@ imports with `ast` and fails on any Qt import below `ui/`. Details and rationale
 
 | Milestone | Scope | Status |
 | --- | --- | --- |
-| **M0 — Scaffolding** | Layout, packaging, docs, module contracts, CI-ready tooling | ✅ done |
-| **M1 — Image pipeline** | `image_loader`, EXIF handling, prefetching, fixture tests | ⬜ planned |
+| **M0 — Scaffolding** | Layout, packaging, docs, module contracts, CI pipeline | ✅ done |
+| **M1 — Image pipeline** | `image_loader`, EXIF handling, prefetching, fixture tests | ✅ done |
 | **M2 — Swipe UI** | `swipe_widget`, `animator`, keyboard bindings, state machine | ⬜ planned |
-| **M3 — Sorting** | `folder_manager`, `sorter`, `file_ops`, collision handling | ⬜ planned |
-| **M4 — Comfort** | Undo, config UI, summary screen, logging, error reporting | ⬜ planned |
-| **M5 — Distribution** | `.desktop` file, icons, AppImage/Flatpak, CI, 1.0 | ⬜ planned |
+| **M3 — Sorting** | `folder_manager`, `sorter`, `file_ops`, collision handling | ✅ done |
+| **M4 — Comfort** | Undo, config UI, summary screen, logging, error reporting | 🟡 partial — undo, config and logging done |
+| **M5 — Distribution** | `.desktop` file, icons, AppImage/Flatpak, 1.0 | ⬜ planned |
 
 ---
 

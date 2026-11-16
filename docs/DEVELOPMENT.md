@@ -201,29 +201,30 @@ twine check dist/*
 7. Tag `vX.Y.Z`, push the tag, upload `dist/*`.
 8. Announce changes; keep the previous minor's config schema readable.
 
-## 9. Continuous integration (planned, M5)
+## 9. Continuous integration
 
-Suggested GitHub Actions outline:
+`.github/workflows/ci.yml` is the source of truth. It runs on every push to
+`main` and on every pull request, in a Python 3.11 / 3.12 / 3.13 matrix with
+`fail-fast: false` so one broken interpreter does not hide the others:
 
-```yaml
-name: ci
-on: [push, pull_request]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12", "3.13"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - run: sudo apt-get update && sudo apt-get install -y libgl1 libegl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libxcb-xinerama0 libxcb-randr0
-      - run: pip install -e ".[dev]"
-      - run: ruff check . && ruff format --check . && mypy
-      - run: QT_QPA_PLATFORM=offscreen pytest -q
+1. `ruff check .`
+2. `ruff format --check .`
+3. `mypy` — no arguments; `[tool.mypy]` already pins `files` and `strict`
+4. `pytest -q` with `QT_QPA_PLATFORM=offscreen`
+
+The job apt-installs the Qt platform libraries (`libgl1`, `libxcb-cursor0`, …)
+because PyQt6 loads them at import time; the offscreen plugin then keeps the
+GUI tests display-free. Reproduce a CI run locally with:
+
+```bash
+QT_QPA_PLATFORM=offscreen .venv/bin/pytest -q
 ```
+
+`pip install -e ".[dev]"` means a dependency added to `pyproject.toml` reaches
+CI without editing the workflow, and the `setup-python` pip cache is keyed on
+`pyproject.toml` for the same reason. If a step starts failing only on a new
+Python version, add that version to `requires-python`, the classifiers and the
+matrix together.
 
 ## 10. Editor setup (VSCode)
 
