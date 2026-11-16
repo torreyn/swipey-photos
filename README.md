@@ -8,10 +8,11 @@ picture left, right, up or down, and ImageSwiper moves it into the matching
 subfolder. No tagging dialogs, no multi-select gymnastics — one decisive
 gesture per photo.
 
+[![ci](https://github.com/torreyn/image-swiper/actions/workflows/ci.yml/badge.svg)](https://github.com/torreyn/image-swiper/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![Qt](https://img.shields.io/badge/Qt-6-green.svg)](https://www.qt.io/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-scaffolding-orange.svg)](#project-status)
+[![Status](https://img.shields.io/badge/status-core%20implemented-orange.svg)](#project-status)
 
 > **Name note.** `ImageSwiper` is the working title, and the package/CLI
 > identifiers (`image_swiper`, `image-swiper`) follow it. The suggested
@@ -33,12 +34,13 @@ into [`docs/assets/`](docs/assets/) and reference them here.*
 
 ## Project status
 
-`v0.1.0` is a **scaffolding release**: the repository layout, packaging
-metadata, architectural documentation and module contracts exist. `app.py`,
-the UI widgets, the sorting engine and the file-operation helpers are
-documented placeholders — `image-swiper` currently exits with
-`NotImplementedError`. Implementation lands milestone by milestone; see the
-[roadmap](#roadmap).
+`v0.1.0` is a **core-only** release. The Qt-free business layer is implemented
+and tested — image loading with EXIF handling, the four-way sorter with undo,
+the folder manager, collision-safe file operations, JSON configuration and
+rotating logs (164 tests, green on Python 3.11–3.13 in CI). The UI layer
+(`app.py`, the widgets, the animator) and the CLI are still documented
+placeholders, so `image-swiper` exits with `NotImplementedError` until the
+swipe UI lands. See the [roadmap](#roadmap) for what is next.
 
 ---
 
