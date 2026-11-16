@@ -14,6 +14,7 @@ from image_swiper.core.image_loader import (
     ImageLoader,
     ImageLoaderError,
     natural_key,
+    subfolders,
 )
 
 NOT_ROOT = pytest.mark.skipif(
@@ -263,9 +264,86 @@ def test_next_candidates_looks_ahead(tmp_path: Path, make_images: MakeImages) ->
     assert loader.next_candidates(0, lookahead=0) == []
 
 
+def test_animated_gif_previews_only_the_first_frame(tmp_path: Path) -> None:
+    """An animated GIF is shown as a still of its first frame."""
+    first = Image.new("RGB", (40, 30), (220, 20, 20))
+    second = Image.new("RGB", (40, 30), (20, 20, 220))
+    path = tmp_path / "animation.gif"
+    first.save(path, "GIF", save_all=True, append_images=[second], duration=100, loop=0)
+
+    image, size = ImageLoader(tmp_path).load_preview(path)
+
+    assert size == (40, 30)
+    assert image.size == (40, 30)
+    assert getattr(image, "n_frames", 1) == 1
+    red, _green, blue = image.getpixel((0, 0))[:3]
+    assert red > 150 and blue < 100
+
+
+def test_large_image_is_downscaled_for_display(tmp_path: Path, make_images: MakeImages) -> None:
+    """A huge photo keeps its original size in the report but not in memory."""
+    path = make_images(tmp_path, count=1, size=(4000, 3000))[0]
+
+    image, size = ImageLoader(tmp_path).load_preview(path)
+
+    assert size == (4000, 3000)
+    assert image.size == (1600, 1200)
+
+
 def test_repr_names_the_folder(tmp_path: Path) -> None:
     """The repr is stable enough for logs and debugging."""
     loader = ImageLoader(tmp_path)
 
     assert "ImageLoader(source_folder=" in repr(loader)
     assert str(tmp_path) in repr(loader)
+
+
+def test_subfolders_lists_children_sorted_naturally(
+    tmp_path: Path, make_images: MakeImages
+) -> None:
+    """A folder whose photos live one level down can name those folders."""
+    for name in ("holiday_10", "holiday_2", "empty"):
+        (tmp_path / name).mkdir()
+        if name != "empty":
+            make_images(tmp_path / name, count=1)
+
+    found = subfolders(tmp_path, require_images=True)
+
+    assert [path.name for path in found] == ["holiday_2", "holiday_10"]
+    assert [path.name for path in subfolders(tmp_path)] == ["empty", "holiday_2", "holiday_10"]
+
+
+def test_subfolders_ignores_hidden_and_category_folders(
+    tmp_path: Path, make_images: MakeImages
+) -> None:
+    """Sort destinations and dot-folders are never suggested as a next step."""
+    for name in (".cache", "Good", "bad", "Album"):
+        (tmp_path / name).mkdir()
+        make_images(tmp_path / name, count=1)
+
+    assert [path.name for path in subfolders(tmp_path)] == ["Album"]
+
+
+def test_subfolders_honours_the_limit(tmp_path: Path) -> None:
+    """The hint stays short even in a folder full of subfolders."""
+    for number in range(5):
+        (tmp_path / f"set_{number}").mkdir()
+
+    assert len(subfolders(tmp_path, limit=2)) == 2
+    assert len(subfolders(tmp_path, limit=0)) == 5
+
+
+def test_subfolders_tolerates_a_missing_folder(tmp_path: Path) -> None:
+    """The hint is best-effort: no folder, no suggestions, no exception."""
+    assert subfolders(tmp_path / "ghost") == []
+
+
+def test_subfolders_accepts_custom_extensions(tmp_path: Path, make_images: MakeImages) -> None:
+    """The extension filter matches the loader's own rules."""
+    (tmp_path / "jpgs").mkdir()
+    (tmp_path / "texts").mkdir()
+    make_images(tmp_path / "jpgs", count=1)
+    (tmp_path / "texts" / "notes.txt").write_text("hello", encoding="utf-8")
+
+    assert [path.name for path in subfolders(tmp_path, require_images=True)] == ["jpgs"]
+    assert subfolders(tmp_path, require_images=True, extensions=["txt"]) == [tmp_path / "texts"]

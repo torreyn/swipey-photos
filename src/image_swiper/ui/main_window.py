@@ -11,12 +11,13 @@ Composition
     * A ``QStackedWidget`` with three pages: :class:`WelcomeScreen`, the swipe
       stage (:class:`SwipeWidget`) and :class:`CompletionScreen`.
     * Header with ``"Image 3 of 47"`` and the folder path; footer with four
-      buttons (Bad, OK, Good, Great) for users who prefer clicking to dragging.
+      buttons (Bad, OK, Good, Great) for users who prefer clicking to dragging,
+      and a gesture legend under the card.
     * Menus: *File* → Open Folder (Ctrl+O), Rescan Folder (F5, Ctrl+R), Undo
-      Last (Ctrl+Z), Quit (Ctrl+Q); *View* → Full Screen (F11); *Help* →
-      Keyboard Shortcuts (F1, ?) and About. The status bar shows the source
-      folder on the left and live per-category counts plus the remaining images
-      on the right.
+      Last (Ctrl+Z), Quit (Ctrl+Q); *View* → Dark Mode, Full Screen (F11);
+      *Help* → Keyboard Shortcuts (F1, ?) and About. The status bar shows the
+      source folder on the left and a live per-category summary, with a coloured
+      dot per category, plus the remaining images on the right.
     * Window-level ``QAction`` shortcuts for the four categories (arrows and
       WASD) and Space to skip, so they work no matter which child has focus.
 
@@ -33,27 +34,32 @@ Error handling
     :meth:`_report_warning` and :meth:`_report_error` — the only methods that
     open a ``QMessageBox``, which is also what makes them replaceable in
     offscreen tests. A failed move leaves the image in the queue and the card
-    usable; an undecodable image is reported once and skipped.
+    usable. An undecodable image is skipped with a status-bar toast and a log
+    line instead of a modal box per file, so a folder full of broken files does
+    not turn into a click-a-thon.
 
 Boundary rules
     * The window owns core objects but performs no file I/O itself: scanning,
       decoding and moving all go through :mod:`image_swiper.core`.
-    * Previews are decoded on the GUI thread, one image at a time; the scan is
-      stat-only, so opening a 5 000-file folder stays fast. Moving decode onto
-      :mod:`image_swiper.ui.workers` is a later optimisation.
-    * Window size, the last folder and the recent folders are persisted through
-      :mod:`image_swiper.utils.config` when a folder is opened and on close.
+    * The current preview is shown from the background prefetch cache when it is
+      ready (:mod:`image_swiper.ui.workers`); a cache miss falls back to a
+      synchronous decode, so behaviour never depends on thread timing.
+    * Window size, the last folder, the recent folders and the theme are
+      persisted through :mod:`image_swiper.utils.config` when a folder is opened
+      and on close.
+    * ``dry_run=True`` (``--dry-run``) uses the same wiring but builds sorters
+      that only log their moves, so the whole flow can be rehearsed safely.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
+from functools import partial
 from pathlib import Path
 
-from PIL import Image
 from PyQt6.QtCore import QEvent, QSize, Qt
-from PyQt6.QtGui import QAction, QCloseEvent, QFont, QImage, QKeySequence, QPixmap
+from PyQt6.QtGui import QAction, QCloseEvent, QFont, QKeySequence, QPixmap
 from PyQt6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -77,9 +83,11 @@ from ..core.folder_manager import (
     FolderManagerError,
     SourceFolderError,
 )
-from ..core.image_loader import ImageLoader, ImageLoaderError
+from ..core.image_loader import ImageLoader, ImageLoaderError, subfolders
 from ..core.sorter import MissingImageError, NoCurrentImageError, Sorter, UndoError
 from ..utils.config import (
+    THEME_DARK,
+    THEME_LIGHT,
     Config,
     ConfigError,
     WindowConfig,
@@ -91,12 +99,25 @@ from ..utils.file_ops import FileOperationError
 from ..utils.logging_setup import get_logger
 from .branding import APP_DISPLAY_NAME, TAGLINE
 from .completion_screen import CompletionScreen
+from .image_utils import pixmap_from_pil, qimage_from_pil
 from .shortcut_overlay import ShortcutOverlay
 from .swipe_card import CATEGORY_COLORS
 from .swipe_widget import SwipeWidget
+from .theme import apply_theme
 from .welcome_screen import WelcomeScreen
+from .workers import PreviewPrefetcher
 
 LOGGER = get_logger(__name__)
+
+__all__ = [
+    "FOOTER_ORDER",
+    "MainWindow",
+    "SorterFactory",
+    "default_sorter_factory",
+    "pixmap_from_pil",
+    "qimage_from_pil",
+]
+"""Public surface; the conversion helpers stay re-exported for the GUI tests."""
 
 PAGE_WELCOME = 0
 """Stack index of the empty state / folder picker."""
@@ -159,7 +180,7 @@ SorterFactory = Callable[[Path], Sorter]
 """Builds a session sorter for a folder; injectable for tests and future modes."""
 
 
-def default_sorter_factory(folder: Path) -> Sorter:
+def default_sorter_factory(folder: Path, *, dry_run: bool = False) -> Sorter:
     """Return a :class:`Sorter` for *folder* with a stat-only scan.
 
     ``validate=False`` keeps folder opening fast on large directories: the
@@ -169,6 +190,7 @@ def default_sorter_factory(folder: Path) -> Sorter:
 
     Args:
         folder: Source folder chosen by the user.
+        dry_run: Build a sorter that logs moves instead of performing them.
 
     Returns:
         A sorter whose loader has not opened any image yet.
@@ -179,39 +201,7 @@ def default_sorter_factory(folder: Path) -> Sorter:
         FolderManagerError: The category folders cannot be created.
     """
     loader = ImageLoader(folder, validate=False)
-    return Sorter(folder, image_loader=loader)
-
-
-def qimage_from_pil(image: Image.Image) -> QImage:
-    """Convert a Pillow image into a detached :class:`QImage`.
-
-    Args:
-        image: The decoded preview returned by ``ImageLoader.load_preview``.
-
-    Returns:
-        An RGB888 or RGBA8888 ``QImage`` that owns its pixels, so the temporary
-        buffer can be garbage-collected after the call.
-    """
-    if image.mode == "RGBA":
-        rgba = image.tobytes("raw", "RGBA")
-        width = image.width
-        buffer = QImage(rgba, width, image.height, 4 * width, QImage.Format.Format_RGBA8888)
-        return buffer.copy()
-    rgb = image.convert("RGB")
-    width = rgb.width
-    buffer = QImage(
-        rgb.tobytes("raw", "RGB"),
-        width,
-        rgb.height,
-        3 * width,
-        QImage.Format.Format_RGB888,
-    )
-    return buffer.copy()
-
-
-def pixmap_from_pil(image: Image.Image) -> QPixmap:
-    """Return *image* as a :class:`QPixmap` ready for the card (GUI thread only)."""
-    return QPixmap.fromImage(qimage_from_pil(image))
+    return Sorter(folder, image_loader=loader, dry_run=dry_run)
 
 
 class MainWindow(QMainWindow):
@@ -224,6 +214,9 @@ class MainWindow(QMainWindow):
             XDG default; tests pass a ``tmp_path`` file instead.
         sorter_factory: Callable building a :class:`Sorter` per folder; inject a
             fake to exercise the wiring without touching the real core.
+        dry_run: Rehearse the session: the default factory builds sorters that
+            log ``would move`` instead of moving anything, and the window says so
+            in its title and status bar.
     """
 
     def __init__(
@@ -233,15 +226,21 @@ class MainWindow(QMainWindow):
         config: Config | None = None,
         config_path: Path | None = None,
         sorter_factory: SorterFactory = default_sorter_factory,
+        dry_run: bool = False,
     ) -> None:
         """Build the window, its menus, its shortcuts and the welcome page."""
         super().__init__(parent)
         self._config = config if config is not None else default_config()
         self._config_path = config_path
-        self._sorter_factory: SorterFactory = sorter_factory
+        self._sorter_factory: SorterFactory = (
+            partial(default_sorter_factory, dry_run=True) if dry_run else sorter_factory
+        )
         self._sorter: Sorter | None = None
+        self._prefetcher: PreviewPrefetcher | None = None
+        self._dry_run = bool(dry_run)
         self._busy = False
         self._unreadable: set[Path] = set()
+        self._last_category: str | None = None
         self._shortcut_overlay: ShortcutOverlay | None = None
         self._category_actions: dict[str, QAction] = {}
         self._category_buttons: dict[str, QPushButton] = {}
@@ -282,6 +281,9 @@ class MainWindow(QMainWindow):
         self._status_folder.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self._status_counts = QLabel("", self)
         self._status_counts.setObjectName("status_counts")
+        self._status_counts.setTextFormat(Qt.TextFormat.RichText)
+        self._status_counts.setStyleSheet("font-weight: 600;")
+        self._status_counts.setToolTip("Images sorted so far, per category, and what is left")
         self._status_bar = QStatusBar(self)
         self._status_bar.setObjectName("main_status_bar")
         self.setStatusBar(self._status_bar)
@@ -389,6 +391,13 @@ class MainWindow(QMainWindow):
 
         view_menu = QMenu("&View", self._menu_bar)
         self._menu_bar.addMenu(view_menu)
+        self._dark_action = QAction("&Dark Mode", self)
+        self._dark_action.setObjectName("action_dark_mode")
+        self._dark_action.setCheckable(True)
+        self._dark_action.setStatusTip("Switch between the light and dark palette")
+        self._dark_action.triggered.connect(self._on_toggle_dark_mode)
+        view_menu.addAction(self._dark_action)
+        view_menu.addSeparator()
         self._fullscreen_action = QAction("&Full Screen", self)
         self._fullscreen_action.setObjectName("action_fullscreen")
         self._fullscreen_action.setShortcuts(list(FULLSCREEN_SHORTCUTS))
@@ -444,10 +453,34 @@ class MainWindow(QMainWindow):
         self._swipe.card.addAction(self._skip_action)
 
     def _apply_config(self) -> None:
-        """Apply the remembered window size and the initial title."""
+        """Apply the remembered window size, the theme and the initial title."""
         self.setMinimumSize(QSize(640, 480))
         self.resize(self._config.window.width, self._config.window.height)
-        self.setWindowTitle(APP_DISPLAY_NAME)
+        self._apply_theme()
+        self._apply_title()
+
+    def _apply_theme(self) -> None:
+        """Install the configured palette and keep the View menu tick in step."""
+        effective = apply_theme(self._config.theme)
+        self._dark_action.setChecked(effective == THEME_DARK)
+
+    def _apply_title(self, folder_name: str | None = None) -> None:
+        """Show the app name, the open folder (if any) and the dry-run marker."""
+        parts = [APP_DISPLAY_NAME]
+        if folder_name:
+            parts.append(folder_name)
+        title = " — ".join(parts)
+        if self._dry_run:
+            title = f"{title} (dry run)"
+        self.setWindowTitle(title)
+
+    def _on_toggle_dark_mode(self, checked: bool) -> None:
+        """Switch palette between dark and light and remember the choice."""
+        theme = THEME_DARK if checked else THEME_LIGHT
+        self._config = replace(self._config, theme=theme)
+        self._apply_theme()
+        self._save_config()
+        self.show_status_message(f"{theme.capitalize()} theme", 2000)
 
     # ------------------------------------------------------------------
     # Public API
@@ -504,6 +537,16 @@ class MainWindow(QMainWindow):
         return self._status_counts
 
     @property
+    def prefetcher(self) -> PreviewPrefetcher | None:
+        """The background preview decoder, or ``None`` before a folder is open."""
+        return self._prefetcher
+
+    @property
+    def dry_run(self) -> bool:
+        """``True`` when moves are only logged, never performed."""
+        return self._dry_run
+
+    @property
     def current_page(self) -> str:
         """Name of the visible page: ``"welcome"``, ``"stage"`` or ``"completion"``."""
         return _PAGE_NAMES.get(self._pages.currentIndex(), "unknown")
@@ -530,22 +573,59 @@ class MainWindow(QMainWindow):
 
         if sorter.total == 0:
             LOGGER.info("no supported images in %s", target)
-            self._report_info(
-                "No images found",
-                f"{target} does not contain any supported image files.\n\n"
-                "Supported formats: JPEG, PNG, GIF, BMP, WebP and TIFF.",
-            )
+            self._report_info("No images found", self._no_images_message(target))
             return False
 
         self._sorter = sorter
         self._unreadable.clear()
+        self._last_category = None
         self._busy = False
+        self._reset_prefetcher(sorter.image_loader)
         self._remember_folder(sorter.source_folder)
-        self.setWindowTitle(f"{APP_DISPLAY_NAME} — {sorter.source_folder.name}")
+        self._apply_title(sorter.source_folder.name)
         self._show_page(PAGE_STAGE)
         self._load_current_image()
+        if self._dry_run:
+            self.show_status_message("Dry run: no files will be moved", 8000)
         LOGGER.info("session started for %s with %d image(s)", sorter.source_folder, sorter.total)
         return True
+
+    def _no_images_message(self, folder: Path) -> str:
+        """Explain why *folder* yielded nothing and where its images may live.
+
+        "No images found" alone is unhelpful when the photos are one level down,
+        so the message names the subfolders that do contain images and, failing
+        that, the subfolders that exist at all.
+        """
+        lines = [
+            f"{folder} does not contain any supported image files at the top level.",
+            "",
+            "Supported formats: JPEG, PNG, GIF, BMP, WebP and TIFF.",
+        ]
+        with_images = subfolders(folder, require_images=True)
+        if with_images:
+            names = ", ".join(path.name for path in with_images)
+            lines += ["", f"The images are in subfolders: {names}.", "Open one of them to sort it."]
+            return "\n".join(lines)
+
+        others = subfolders(folder)
+        if others:
+            names = ", ".join(path.name for path in others)
+            lines += [
+                "",
+                f"It only contains subfolders: {names}.",
+                "Open one of them to sort its images.",
+            ]
+        else:
+            lines += ["", "Add some photos to it and open it again."]
+        return "\n".join(lines)
+
+    def _reset_prefetcher(self, loader: ImageLoader) -> None:
+        """Replace the prefetcher so it only decodes files of the current session."""
+        if self._prefetcher is not None:
+            self._prefetcher.shutdown()
+            self._prefetcher.deleteLater()
+        self._prefetcher = PreviewPrefetcher(loader, parent=self)
 
     def restore_last_session(self) -> bool:
         """Reopen the folder remembered in the configuration, if it still exists.
@@ -598,7 +678,9 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(message, timeout_ms)
 
     def closeEvent(self, event: QCloseEvent | None) -> None:
-        """Save the state before the window closes."""
+        """Stop the prefetcher and save the state before the window closes."""
+        if self._prefetcher is not None:
+            self._prefetcher.shutdown()
         self.save_state()
         super().closeEvent(event)
 
@@ -609,38 +691,75 @@ class MainWindow(QMainWindow):
     def _load_current_image(self) -> None:
         """Show the sorter's current image, skipping files that cannot be decoded.
 
-        A preview that Pillow rejects is reported and passed over with
-        ``Sorter.advance()``, which leaves the file where it is: the user can
-        still deal with it outside the app. When no image is left the summary
-        page replaces the stage.
+        The preview comes from the background cache when it is ready and is
+        decoded synchronously otherwise, so a slow disk never changes the
+        behaviour, only the latency. A file Pillow rejects is skipped with a
+        status-bar toast (never a modal box, which would turn a folder of broken
+        files into a click-a-thon) and left where it is: the user can still deal
+        with it outside the app. When no image is left the summary page replaces
+        the stage.
         """
         sorter = self._sorter
         if sorter is None:
             self._show_page(PAGE_WELCOME)
             return
 
+        skipped: list[str] = []
         while True:
             path = sorter.current_image()
             if path is None:
+                if skipped:
+                    self._report_skipped(skipped)
                 self._show_completion()
                 return
-            try:
-                image, original_size = sorter.image_loader.load_preview(path)
-            except ImageLoaderError as exc:
-                LOGGER.warning("skipping undecodable image %s: %s", path, exc)
-                self._unreadable.add(path)
-                self._report_warning(
-                    "Image skipped",
-                    f"{path.name} could not be read and was skipped.\n\n{exc}",
-                )
-                sorter.advance()
-                continue
-            pixmap = pixmap_from_pil(image)
+            pixmap, original_size = self._prefetched_preview(path)
+            if pixmap is None:
+                try:
+                    image, original_size = sorter.image_loader.load_preview(path)
+                except ImageLoaderError as exc:
+                    LOGGER.warning("skipping undecodable image %s: %s", path, exc)
+                    self._unreadable.add(path)
+                    skipped.append(path.name)
+                    sorter.advance()
+                    continue
+                pixmap = pixmap_from_pil(image)
+            if skipped:
+                self._report_skipped(skipped)
             caption = f"{path.name} - {original_size[0]} x {original_size[1]}"
-            self._swipe.show_image(pixmap, caption=caption)
+            self._swipe.show_image(pixmap, caption=caption, from_direction=self._last_category)
             self._swipe.set_interactive(True)
+            self._prefetch_upcoming()
             self._refresh_status()
             return
+
+    def _prefetched_preview(self, path: Path) -> tuple[QPixmap | None, tuple[int, int]]:
+        """Return a prefetched preview as ``(pixmap, original_size)``.
+
+        ``(None, (0, 0))`` means the preview is not ready yet, in which case the
+        caller decodes the file synchronously exactly as before.
+        """
+        if self._prefetcher is None:
+            return None, (0, 0)
+        preview = self._prefetcher.take(path)
+        if preview is None:
+            return None, (0, 0)
+        image, size = preview
+        return QPixmap.fromImage(image), size
+
+    def _prefetch_upcoming(self) -> None:
+        """Ask the worker pool to decode the images after the current one."""
+        sorter = self._sorter
+        if sorter is None or self._prefetcher is None:
+            return
+        upcoming = sorter.remaining[1:]
+        if upcoming:
+            self._prefetcher.prefetch(upcoming)
+
+    def _report_skipped(self, names: list[str]) -> None:
+        """Mention unreadable files in the status bar instead of a modal dialog."""
+        shown = ", ".join(names[:3]) + ("…" if len(names) > 3 else "")
+        LOGGER.warning("skipped %d unreadable image(s): %s", len(names), shown)
+        self.show_status_message(f"Skipped {len(names)} unreadable image(s): {shown}", 8000)
 
     def _on_swipe_committed(self, category: str) -> None:
         """Move the current image into *category* and deal the next one.
@@ -672,13 +791,24 @@ class MainWindow(QMainWindow):
             LOGGER.error("could not move the current image to %s: %s", category, exc)
             self._report_error("Could not move image", f"{exc}\n\nThe image stays in the queue.")
         else:
-            self.show_status_message(f"Moved {record.source.name} → {record.category}/", 3000)
+            self._last_category = record.category
+            if self._dry_run:
+                self.show_status_message(
+                    f"Dry run: would move {record.source.name} → {record.category}/", 4000
+                )
+            else:
+                self.show_status_message(f"Moved {record.source.name} → {record.category}/", 3000)
         finally:
             self._busy = False
             self._load_current_image()
 
     def _on_undo(self) -> None:
-        """Restore the most recently sorted image and show it again."""
+        """Restore the most recently sorted image and show it again.
+
+        The stage dims for a moment while the card is swapped, which makes the
+        "this is the image you just put away" relationship obvious without a
+        dialog. Undo leaves the stage interactive again immediately.
+        """
         sorter = self._sorter
         if sorter is None or self._busy:
             return
@@ -693,7 +823,9 @@ class MainWindow(QMainWindow):
             return
         self.show_status_message(f"Restored {record.filename} from {record.category}/")
         self._show_page(PAGE_STAGE)
+        self._swipe.animator.fade_stage(0.35)
         self._load_current_image()
+        self._swipe.animator.fade_stage(1.0)
 
     def _on_skip(self) -> None:
         """Leave the current image in place and show the next one."""
@@ -744,11 +876,16 @@ class MainWindow(QMainWindow):
         """
         sorter = self._sorter
         counts = sorter.counts if sorter is not None else {}
-        parts = [f"{category} {counts.get(category, 0)}" for category in CATEGORIES]
+        parts = [
+            f'<span style="color:{CATEGORY_COLORS[category]}">●</span> '
+            f"{category} {counts.get(category, 0)}"
+            for category in CATEGORIES
+        ]
         if sorter is not None:
             unsorted = sorter.total - sum(counts.values())
             parts.append(f"{unsorted} left")
-        self._status_counts.setText("  ·  ".join(parts))
+        separator = "  ·  "
+        self._status_counts.setText(separator.join(parts))
         self._status_folder.setText(str(sorter.source_folder) if sorter is not None else "")
         self._folder_label.setText(str(sorter.source_folder) if sorter is not None else "")
         self._refresh_progress()

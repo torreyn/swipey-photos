@@ -90,12 +90,16 @@ tests/
 ├── test_logging_setup.py    # rotation, levels, namespace, log directory
 ├── test_sorter.py           # queue cursor, counters, undo, vanished files
 ├── test_swipe_card.py       # fit/aspect, drag maths, thresholds, badge, fly-out (gui)
-├── test_swipe_widget.py     # stage: image hand-off, caption, signal forwarding (gui)
+├── test_swipe_widget.py     # stage: image hand-off, caption, legend, fade-in (gui)
+├── test_animator.py         # card entrance, stage fades, interruption, cleanup (gui)
+├── test_workers.py          # prefetch lookahead, cache, cancellation, failures (gui)
+├── test_theme.py            # dark/light palettes, system fallback (gui)
 ├── test_welcome_screen.py   # picker, recent-folder list, emit rules (gui)
 ├── test_completion_screen.py # summary text, counts, button signals (gui)
-├── test_main_window.py      # three-page flow, moves, undo, rescan, full screen (gui)
+├── test_main_window.py      # three-page flow, moves, undo, rescan, full screen,
+│                            #   dark mode, prefetch, --dry-run, edge cases (gui)
 ├── test_shortcut_overlay.py # shortcut table, key caps, reuse, Esc (gui)
-└── test_app.py              # CLI flags, run(), identity and icon (gui)
+└── test_app.py              # CLI flags, run(), dry-run forwarding, identity (gui)
 ```
 
 Principles:

@@ -66,7 +66,7 @@ spaces, so diffs stay small. Order is irrelevant when reading.
 | `recent_folders` | array of strings | `[]` | up to five newest-first folders offered on the welcome page; blank and duplicate entries are dropped, extra entries are trimmed with a warning |
 | `window.width` | integer | `1200` | remembered window width in logical pixels (200–20000) |
 | `window.height` | integer | `800` | remembered window height in logical pixels (200–20000) |
-| `theme` | string | `"system"` | `system`, `light` or `dark` |
+| `theme` | string | `"system"` | `system`, `light` or `dark`; also switched from *View → Dark Mode*, which writes this key |
 
 Unknown keys (top level or inside `window`) are logged at WARNING and ignored, so
 a file written by a newer build still loads in an older one.
@@ -122,7 +122,8 @@ set it by hand:
 { "last_folder": "/home/you/Pictures/to-sort" }
 ```
 
-**Force the dark theme:**
+**Force the dark theme** — or just tick *View → Dark Mode*, which writes this key
+for you:
 
 ```json
 { "theme": "dark" }

@@ -57,6 +57,27 @@ def test_parser_documents_the_cli(tmp_path: Path) -> None:
     assert args.verbose is True
     assert args.log_level == "DEBUG"
     assert args.version is False
+    assert args.dry_run is False
+
+
+def test_dry_run_flag_is_forwarded_to_run(
+    monkeypatch: pytest.MonkeyPatch, xdg_dirs: dict[str, Path]
+) -> None:
+    """``--dry-run`` reaches the composition root instead of being ignored."""
+    from image_swiper import __main__ as entry_point
+
+    recorded: dict[str, object] = {}
+
+    def fake_run(**kwargs: object) -> int:
+        recorded.update(kwargs)
+        return 0
+
+    monkeypatch.setattr(entry_point, "run", fake_run)
+
+    assert entry_point.main(["photos", "--dry-run"]) == 0
+
+    assert recorded["dry_run"] is True
+    assert recorded["folder"] == Path("photos")
 
 
 @pytest.mark.gui
@@ -88,6 +109,7 @@ def _run_until_closed(
     folder: Path | None = None,
     config: Config | None = None,
     config_path: Path,
+    dry_run: bool = False,
 ) -> tuple[int, MainWindow]:
     """Call ``run()`` and close the window from a timer to end the event loop."""
     seen: dict[str, MainWindow] = {}
@@ -106,6 +128,7 @@ def _run_until_closed(
         config=config,
         config_path=config_path,
         folder=folder,
+        dry_run=dry_run,
     )
     assert "window" in seen, "run() never showed a MainWindow"
     return code, seen["window"]
@@ -153,6 +176,34 @@ def test_run_survives_a_broken_configuration(
     assert code == 0
     assert window.current_page == "welcome"
     assert "Settings could not be read" in window.statusBar().currentMessage()
+
+
+@pytest.mark.gui
+def test_run_in_dry_run_reports_the_mode(
+    qtbot: QtBot,
+    qapp: object,
+    make_images: Callable[..., list[Path]],
+    tmp_path: Path,
+    xdg_dirs: dict[str, Path],
+) -> None:
+    """``run(dry_run=True)`` builds a rehearsing window and moves nothing."""
+    folder = tmp_path / "photos"
+    make_images(folder, count=2)
+
+    code, window = _run_until_closed(
+        qtbot,
+        qapp,
+        folder=folder,
+        config=Config(),
+        config_path=tmp_path / "config.json",
+        dry_run=True,
+    )
+
+    assert code == 0
+    assert window.dry_run
+    assert "(dry run)" in window.windowTitle()
+    assert window.current_page == "stage"
+    assert (folder / "IMG_1.jpg").exists()
 
 
 @pytest.mark.gui

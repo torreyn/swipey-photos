@@ -51,10 +51,11 @@ pytestmark = pytest.mark.gui
 def window(qtbot: QtBot, tmp_path: Path, xdg_dirs: dict[str, Path]) -> Callable[..., MainWindow]:
     """Return a factory that builds a shown window persisting into ``tmp_path``."""
 
-    def factory(config: Config | None = None) -> MainWindow:
+    def factory(config: Config | None = None, *, dry_run: bool = False) -> MainWindow:
         created = MainWindow(
             config=Config() if config is None else config,
             config_path=tmp_path / "config.json",
+            dry_run=dry_run,
         )
         qtbot.addWidget(created)
         created.show()
@@ -446,14 +447,14 @@ def test_undo_from_the_summary_returns_to_the_stage(
 # ----------------------------------------------------------------------
 
 
-def test_unreadable_image_is_reported_and_skipped(
+def test_unreadable_image_is_skipped_with_a_toast(
     qtbot: QtBot,
     window: Callable[..., MainWindow],
     dialogs: list[tuple[str, str, str]],
     make_images: Callable[..., list[Path]],
     tmp_path: Path,
 ) -> None:
-    """A corrupt file is reported once and left in place."""
+    """A corrupt file is announced in the status bar and left in place."""
     folder = tmp_path / "corrupt"
     make_images(folder, count=1)
     make_images(folder, count=1, start=2, corrupt=True)
@@ -462,10 +463,10 @@ def test_unreadable_image_is_reported_and_skipped(
     assert created.progress_label.text() == "Image 1 of 2"
 
     commit(qtbot, created, "Good")
-    wait_for_dialog(qtbot, dialogs)
+    qtbot.waitUntil(lambda: "unreadable" in created.statusBar().currentMessage(), timeout=3000)
 
-    assert dialogs[0][0] == "warning"
-    assert dialogs[0][1] == "Image skipped"
+    assert dialogs == []
+    assert "IMG_2.jpg" in created.statusBar().currentMessage()
     assert (folder / "IMG_2.jpg").exists()
     assert created.current_page == "completion"
     note = created.completion_screen.findChild(QWidget, "completion_skipped")
@@ -486,7 +487,8 @@ def test_folder_of_only_corrupt_images_finishes_immediately(
     assert created.open_folder(folder)
 
     assert created.current_page == "completion"
-    assert [kind for kind, _title, _message in dialogs] == ["warning", "warning"]
+    assert dialogs == []
+    assert "2 unreadable image(s)" in created.statusBar().currentMessage()
     assert created.completion_screen.headline.text() == "All done! 0 images sorted"
 
 
@@ -688,7 +690,6 @@ def test_rescan_with_nothing_left_shows_the_summary(
 
 def test_rescan_does_not_double_count_unreadable_images(
     window: Callable[..., MainWindow],
-    dialogs: list[tuple[str, str, str]],
     make_images: Callable[..., list[Path]],
     tmp_path: Path,
 ) -> None:
@@ -705,7 +706,6 @@ def test_rescan_does_not_double_count_unreadable_images(
     rescan.trigger()
 
     assert note.text().startswith("1 image")
-    assert [kind for kind, _title, _message in dialogs] == ["warning", "warning"]
 
 
 def test_rescan_is_disabled_without_a_session(window: Callable[..., MainWindow]) -> None:
@@ -802,3 +802,191 @@ def test_shortcut_help_reuses_one_overlay(qtbot: QtBot, window: Callable[..., Ma
 
     assert created.shortcut_overlay is first
     assert first.isVisible()
+
+
+# ----------------------------------------------------------------------
+# Polish: theme, legend, summary bar, prefetching and dry run
+# ----------------------------------------------------------------------
+
+
+def test_stage_shows_the_gesture_legend(window: Callable[..., MainWindow]) -> None:
+    """The key map is repeated under the card, not only in tooltips."""
+    created = window()
+
+    legend = created.swipe_widget.legend
+
+    assert legend.text() == "← Bad    ↓ OK    ↑ Great    → Good"
+    assert legend.isVisibleTo(created.swipe_widget)
+
+
+def test_summary_bar_uses_the_category_colours(
+    window: Callable[..., MainWindow], sample_folder: Path
+) -> None:
+    """The live counts are coloured per category, like the buttons."""
+    created = window()
+    created.open_folder(sample_folder)
+
+    text = created.status_counts_label.text()
+
+    assert "Good 0" in text
+    for colour in ("#3ddc84", "#ff5b5b", "#f2c14e", "#4aa3ff"):
+        assert colour in text
+
+
+def test_opening_a_folder_starts_prefetching(
+    qtbot: QtBot, window: Callable[..., MainWindow], sample_folder: Path
+) -> None:
+    """The next previews are decoded in the background, not on demand."""
+    created = window()
+
+    created.open_folder(sample_folder)
+
+    prefetcher = created.prefetcher
+    assert prefetcher is not None
+    qtbot.waitUntil(lambda: len(prefetcher.cached_paths()) >= 2, timeout=5000)
+    assert str(sample_folder / "IMG_1.jpg") not in prefetcher.cached_paths()
+
+
+def test_dark_mode_toggle_switches_and_persists(
+    qtbot: QtBot, window: Callable[..., MainWindow], tmp_path: Path
+) -> None:
+    """View → Dark Mode applies the palette and remembers the choice."""
+    created = window(Config(theme="light"))
+    dark = created.findChild(QAction, "action_dark_mode")
+    assert dark is not None
+    assert not dark.isChecked()
+
+    dark.trigger()
+
+    assert dark.isChecked()
+    assert created.config.theme == "dark"
+    saved = load_config(tmp_path / "config.json")
+    assert saved.theme == "dark"
+    assert "Dark theme" in created.statusBar().currentMessage()
+
+    dark.trigger()
+
+    assert not dark.isChecked()
+    assert created.config.theme == "light"
+
+
+def test_dark_config_checks_the_menu_item(window: Callable[..., MainWindow]) -> None:
+    """A remembered dark theme shows up as a ticked menu item."""
+    created = window(Config(theme="dark"))
+
+    dark = created.findChild(QAction, "action_dark_mode")
+
+    assert dark is not None and dark.isChecked()
+
+
+def test_dry_run_never_moves_a_file(
+    qtbot: QtBot, window: Callable[..., MainWindow], sample_folder: Path
+) -> None:
+    """``--dry-run`` walks the session but leaves every image where it was."""
+    created = window(dry_run=True)
+    assert created.dry_run
+    assert "(dry run)" in created.windowTitle()
+    assert created.open_folder(sample_folder)
+    assert "Dry run" in created.statusBar().currentMessage()
+
+    commit(qtbot, created, "Good")
+
+    assert (sample_folder / "IMG_1.jpg").exists()
+    assert not (sample_folder / "Good" / "IMG_1.jpg").exists()
+    sorter = created.sorter
+    assert sorter is not None and sorter.counts == {"Good": 1}
+    assert created.progress_label.text() == "Image 2 of 3"
+    assert "would move IMG_1.jpg" in created.statusBar().currentMessage()
+
+
+def test_dry_run_undo_returns_to_the_stage(
+    qtbot: QtBot, window: Callable[..., MainWindow], sample_folder: Path
+) -> None:
+    """Undo in a dry run is rehearsed too, and cannot fail on a missing file."""
+    created = window(dry_run=True)
+    created.open_folder(sample_folder)
+    commit(qtbot, created, "Bad")
+
+    undo = created.findChild(QAction, "action_undo")
+    assert undo is not None
+    undo.trigger()
+
+    assert created.current_page == "stage"
+    assert created.progress_label.text() == "Image 1 of 3"
+    assert (sample_folder / "IMG_1.jpg").exists()
+
+
+def test_empty_folder_message_suggests_adding_photos(
+    window: Callable[..., MainWindow], dialogs: list[tuple[str, str, str]], tmp_path: Path
+) -> None:
+    """An empty folder is explained, with the supported formats."""
+    folder = tmp_path / "empty"
+    folder.mkdir()
+    created = window()
+
+    assert not created.open_folder(folder)
+
+    assert dialogs[0][0] == "info"
+    assert dialogs[0][1] == "No images found"
+    assert "does not contain any supported image files" in dialogs[0][2]
+    assert "Add some photos" in dialogs[0][2]
+
+
+def test_folder_of_only_subfolders_names_them(
+    window: Callable[..., MainWindow],
+    dialogs: list[tuple[str, str, str]],
+    make_images: Callable[..., list[Path]],
+    tmp_path: Path,
+) -> None:
+    """Photos one level down are pointed out instead of silently missing."""
+    folder = tmp_path / "trip"
+    make_images(folder / "day_1", count=1)
+    make_images(folder / "day_2", count=1)
+    (folder / "notes").mkdir()
+    created = window()
+
+    assert not created.open_folder(folder)
+
+    message = dialogs[0][2]
+    assert "The images are in subfolders: day_1, day_2" in message
+    assert "Open one of them to sort it." in message
+
+
+def test_folder_of_empty_subfolders_says_so(
+    window: Callable[..., MainWindow], dialogs: list[tuple[str, str, str]], tmp_path: Path
+) -> None:
+    """Subfolders without images are still named, with the right advice."""
+    folder = tmp_path / "albums"
+    (folder / "misc").mkdir(parents=True)
+    (folder / "old").mkdir()
+    created = window()
+
+    assert not created.open_folder(folder)
+
+    message = dialogs[0][2]
+    assert "It only contains subfolders: misc, old." in message
+    assert "Open one of them to sort its images." in message
+
+
+def test_large_image_is_downscaled_for_display_and_moved_unchanged(
+    qtbot: QtBot,
+    window: Callable[..., MainWindow],
+    make_images: Callable[..., list[Path]],
+    tmp_path: Path,
+) -> None:
+    """A 12 MP photo is previewed at screen size while the original moves as-is."""
+    folder = tmp_path / "huge"
+    source = make_images(folder, count=1, size=(4000, 3000))[0]
+    original = source.read_bytes()
+    created = window()
+
+    assert created.open_folder(folder)
+    preview = created.swipe_widget.card.pixmap
+    assert preview is not None
+    assert max(preview.width(), preview.height()) <= 1600
+
+    commit(qtbot, created, "Great")
+
+    moved = folder / "Great" / source.name
+    assert moved.exists()
+    assert moved.read_bytes() == original

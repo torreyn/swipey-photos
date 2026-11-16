@@ -121,6 +121,7 @@ def build_main_window(
     config: Config | None = None,
     *,
     config_path: Path | None = None,
+    dry_run: bool = False,
 ) -> MainWindow:
     """Construct the main window and its dependencies without an event loop.
 
@@ -130,6 +131,7 @@ def build_main_window(
         config: Configuration to use. When ``None`` it is read from
             *config_path* (or the XDG default).
         config_path: Explicit configuration file, used by ``--config`` and tests.
+        dry_run: Rehearse the session instead of moving files, for ``--dry-run``.
 
     Returns:
         A :class:`~image_swiper.ui.main_window.MainWindow` that is not shown yet.
@@ -140,7 +142,7 @@ def build_main_window(
     from .ui.main_window import MainWindow
 
     resolved = config if config is not None else load_config(config_path)
-    window = MainWindow(config=resolved, config_path=config_path)
+    window = MainWindow(config=resolved, config_path=config_path, dry_run=dry_run)
     window.setWindowIcon(app.windowIcon())
     return window
 
@@ -151,6 +153,7 @@ def run(
     config: Config | None = None,
     config_path: Path | None = None,
     folder: Path | str | None = None,
+    dry_run: bool = False,
 ) -> int:
     """Create the application, show the main window and run the event loop.
 
@@ -162,6 +165,7 @@ def run(
             broken file falls back to defaults with a visible warning.
         config_path: Alternative configuration file.
         folder: Folder to open immediately, skipping the welcome page.
+        dry_run: Log what would be moved instead of moving anything.
 
     Returns:
         The Qt exit code (``0`` for a clean quit) or ``1`` when the window could
@@ -192,7 +196,7 @@ def run(
             config = default_config()
 
     try:
-        window = build_main_window(app, config, config_path=config_path)
+        window = build_main_window(app, config, config_path=config_path, dry_run=dry_run)
     except Exception:
         LOGGER.exception("could not create the main window")
         print(

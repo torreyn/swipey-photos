@@ -111,6 +111,67 @@ def test_caption_can_be_switched_off(qtbot: QtBot) -> None:
     assert not _caption(widget).isVisible()
 
 
+def test_legend_shows_the_gesture_map(qtbot: QtBot) -> None:
+    """The key map is visible under the card."""
+    widget = SwipeWidget()
+    qtbot.addWidget(widget)
+    widget.show()
+
+    assert widget.legend.text() == "← Bad    ↓ OK    ↑ Great    → Good"
+    assert widget.legend.isVisible()
+
+
+def test_legend_can_be_switched_off(qtbot: QtBot) -> None:
+    """A bare stage hides the hint together with the caption."""
+    widget = SwipeWidget(show_legend=False)
+    qtbot.addWidget(widget)
+    widget.show()
+
+    assert not widget.legend.isVisible()
+
+
+def test_show_image_fades_the_card_in(qtbot: QtBot) -> None:
+    """A new card enters transparent and becomes opaque when it settles."""
+    widget = SwipeWidget(animation_ms=120)
+    qtbot.addWidget(widget)
+    widget.resize(400, 320)
+    widget.show()
+
+    widget.show_image(_pixmap(), caption="IMG_1.jpg")
+    assert widget.card.fade < 1.0
+
+    qtbot.waitUntil(lambda: widget.card.fade == pytest.approx(1.0), timeout=2000)
+    assert widget.card.pos() == widget.card.home_position
+
+
+def test_show_image_without_animation_is_instant(qtbot: QtBot) -> None:
+    """``animation_ms=0`` is the reduced-motion path: no animation at all."""
+    widget = SwipeWidget(animation_ms=0)
+    qtbot.addWidget(widget)
+    widget.resize(400, 320)
+    widget.show()
+
+    widget.show_image(_pixmap())
+
+    assert widget.card.fade == pytest.approx(1.0)
+    assert widget.card.pos() == widget.card.home_position
+    assert widget.animator.duration_ms == 0
+
+
+def test_clear_stops_a_running_entrance(qtbot: QtBot) -> None:
+    """Clearing the stage mid-animation leaves nothing animating."""
+    widget = SwipeWidget(animation_ms=200)
+    qtbot.addWidget(widget)
+    widget.resize(400, 320)
+    widget.show()
+    widget.show_image(_pixmap())
+
+    widget.clear()
+
+    assert widget.card.fade == pytest.approx(1.0)
+    assert widget.card.pos() == widget.card.home_position
+
+
 def test_swipe_is_forwarded_canonically(qtbot: QtBot) -> None:
     """The stage re-emits the category the card committed."""
     widget = SwipeWidget()

@@ -278,6 +278,7 @@ class SwipeCard(QWidget):
         self._scaled_key: tuple[int, int, int] | None = None
 
         self._home_pos = QPoint()
+        self._home_locked = False
         self._drag_origin = QPointF()
         self._drag_anchor = QPointF()
         self._drag_offset = QPointF()
@@ -363,6 +364,31 @@ class SwipeCard(QWidget):
     def home_position(self) -> QPoint:
         """The resting position the card springs back to."""
         return QPoint(self._home_pos)
+
+    def lock_home(self) -> QPoint:
+        """Freeze the resting position at the card's current position.
+
+        A deck-level entrance animation (see
+        :class:`~image_swiper.ui.animator.CardAnimator`) moves the card without
+        dragging it. Without this lock, :meth:`moveEvent` would mistake the
+        animated position for the new home and the card would settle off-centre.
+        While the lock is held, moves never update :attr:`home_position`.
+
+        Returns:
+            The position that is now the home the card must return to.
+        """
+        if not self._home_locked:
+            self._home_pos = self.pos()
+            self._home_locked = True
+        return QPoint(self._home_pos)
+
+    def unlock_home(self) -> None:
+        """Re-enable automatic home tracking after :meth:`lock_home`.
+
+        The recorded home is kept; the next move the card makes while idle (a
+        parent resize, for example) records a new one.
+        """
+        self._home_locked = False
 
     @property
     def max_rotation(self) -> float:
@@ -469,6 +495,7 @@ class SwipeCard(QWidget):
         """
         self._stop_animations()
         self._clear_gesture_state()
+        self._home_locked = False
         if animated and self._spring_back_ms > 0:
             self._start_spring_back()
             return
@@ -634,9 +661,15 @@ class SwipeCard(QWidget):
         A parent repositions the card on resize and on first show; recording
         that position as home keeps the spring-back target and the fly-out
         origin correct. Moves the card performs itself (drag or animation) are
-        ignored, otherwise "home" would follow the card off-screen.
+        ignored, otherwise "home" would follow the card off-screen — and so are
+        moves made while a deck-level entrance animation holds the home lock.
         """
-        if not self._dragging and not self._animating and self._drag_offset.isNull():
+        if (
+            not self._home_locked
+            and not self._dragging
+            and not self._animating
+            and self._drag_offset.isNull()
+        ):
             self._home_pos = self.pos()
         super().moveEvent(event)
 

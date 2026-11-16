@@ -481,6 +481,23 @@ def test_set_pixmap_re_arms_the_card_after_a_swipe(
     assert card.scaled_pixmap() is not None
 
 
+def test_lock_home_keeps_the_rest_position_while_the_card_moves(card: SwipeCard) -> None:
+    """A deck-level entrance animation must not teach the card a new home."""
+    home = card.home_position
+
+    locked = card.lock_home()
+    card.move(home + QPoint(-48, 0))
+    card.move(home + QPoint(-12, 0))
+
+    assert locked == home
+    assert card.home_position == home
+    assert card.pos() != home
+
+    card.unlock_home()
+    card.move(home)
+    assert card.home_position == home
+
+
 def test_card_depends_on_nothing_but_qt() -> None:
     """The widget must stay reusable: no core, no utils, no session knowledge."""
     module_path = Path(swipe_card.__file__)

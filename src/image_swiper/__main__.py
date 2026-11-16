@@ -9,7 +9,8 @@ in two ways:
 
 Responsibilities
     1. Parse the small command-line surface (an optional starting folder,
-       ``--version``, ``--config``, ``--log-level`` and ``--verbose``).
+       ``--version``, ``--config``, ``--log-level``, ``--verbose`` and
+       ``--dry-run``).
        Argument parsing lives here rather than in :mod:`image_swiper.app` so the
        app module stays importable without touching ``sys.argv``.
     2. Configure logging with :func:`image_swiper.utils.logging_setup.setup_logging`
@@ -83,6 +84,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="log at DEBUG level and echo the log to stderr",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "log what would be moved without touching any file; useful for trying "
+            "the app on a folder you do not want to sort yet"
+        ),
+    )
     return parser
 
 
@@ -111,7 +120,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ImageSwiper {__version__}")
         return 0
 
-    return run(argv=[sys.argv[0]], config_path=args.config, folder=args.folder)
+    return run(
+        argv=[sys.argv[0]],
+        config_path=args.config,
+        folder=args.folder,
+        dry_run=args.dry_run,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised via the console script

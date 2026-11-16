@@ -351,3 +351,64 @@ def test_repr_summarises_the_session(sample_folder: Path) -> None:
     assert "index=0" in text
     assert "total=3" in text
     assert "undo=1" in text
+
+
+# ----------------------------------------------------------------------
+# Dry run
+# ----------------------------------------------------------------------
+
+
+def test_dry_run_is_off_by_default(sample_folder: Path) -> None:
+    """Normal sessions are real sessions."""
+    assert Sorter(sample_folder).dry_run is False
+
+
+def test_dry_run_logs_the_move_without_touching_the_file(
+    sample_folder: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The whole state machine advances, but the file stays where it was."""
+    sorter = Sorter(sample_folder, dry_run=True)
+    source = sample_folder / "IMG_1.jpg"
+
+    with caplog.at_level("INFO", logger="image_swiper"):
+        record = sorter.categorize("Good")
+
+    assert sorter.dry_run is True
+    assert source.exists()
+    assert not (sample_folder / "Good" / "IMG_1.jpg").exists()
+    assert record.source == source
+    assert record.destination == sample_folder / "Good" / "IMG_1.jpg"
+    assert sorter.counts == {"Good": 1}
+    assert sorter.remaining_count == 2
+    assert "dry run: would move IMG_1.jpg" in caplog.text
+
+
+def test_dry_run_undo_restores_the_queue_without_a_file_move(
+    sample_folder: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Undo in a dry run puts the image back at its index and touches nothing."""
+    sorter = Sorter(sample_folder, dry_run=True)
+    sorter.categorize("Bad")
+
+    with caplog.at_level("INFO", logger="image_swiper"):
+        record = sorter.undo()
+
+    assert record is not None
+    assert (sample_folder / "IMG_1.jpg").exists()
+    assert sorter.current_image() == sample_folder / "IMG_1.jpg"
+    assert sorter.counts == {}
+    assert sorter.history == ()
+    assert "dry run: would restore IMG_1.jpg" in caplog.text
+
+
+def test_dry_run_plans_a_collision_free_name(sample_folder: Path, make_images: MakeImages) -> None:
+    """The logged destination is the name a real move would have produced."""
+    destination = sample_folder / "Good"
+    destination.mkdir(exist_ok=True)
+    make_images(destination, count=1)
+    sorter = Sorter(sample_folder, dry_run=True)
+
+    record = sorter.categorize("Good")
+
+    assert record.destination.name == "IMG_1_1.jpg"
+    assert not record.destination.exists()

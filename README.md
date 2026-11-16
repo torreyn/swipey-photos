@@ -39,14 +39,16 @@ drop `*.png` files into [`docs/assets/`](docs/assets/) and reference them here
 implemented and tested — image loading with EXIF handling, the four-way sorter
 with undo, the folder manager, collision-safe file operations, JSON
 configuration and rotating logs. The Qt side is wired up too: the swipe card
-(drag physics, rotation, directional feedback, fly-out), the stage around it,
-the welcome screen with recent folders, the completion summary and the main
-window (menus, progress, footer buttons, status bar, config persistence). You
-can start it with `python -m image_swiper` or the installed `image-swiper`
-script and sort a folder end to end (301 tests, green on Python 3.11–3.13 in
-CI). Deck fly-in animation and background scanning/prefetch are the remaining
-polish items; rescan (F5/Ctrl+R), full screen (F11) and the F1/`?` shortcut
-overlay have landed. See the [roadmap](#roadmap) for what is next.
+(drag physics, rotation, directional feedback, fly-out), the stage around it with
+its gesture legend, the welcome screen with recent folders, the completion
+summary and the main window (menus, progress, footer buttons, live status-bar
+counts, config persistence). You can start it with `python -m image_swiper` or
+the installed `image-swiper` script and sort a folder end to end (367 tests,
+green on Python 3.11–3.13 in CI). The polish pass has landed: 150 ms card
+fade-ins, background prefetch of the next previews, a dark-mode toggle, undo with
+a stage fade, `--dry-run`, and friendly handling of corrupt files, GIFs, huge
+images and folders that only contain subfolders. See the
+[roadmap](#roadmap) for what is next.
 
 ---
 
@@ -75,12 +77,19 @@ Planned for v1.0 (see the roadmap for what is already implemented):
 - **Snappy navigation.** Background decoding + prefetch of the next images so
   moving through a large folder stays responsive.
 - **Remembers context.** Last folder, window size and theme are persisted to a
-  human-editable JSON config.
+  human-editable JSON config; *View → Dark Mode* switches palettes live.
+- **Looks the part.** Rounded card with a soft shadow, a 150 ms fade-in for each
+  new image, a `← Bad ↓ OK ↑ Great → Good` hint under the card and a live
+  per-category summary bar at the bottom.
+- **Safe to try.** `image-swiper --dry-run FOLDER` logs what it *would* move and
+  leaves every file untouched, so you can rehearse a sort first.
 - **Predictable buckets.** `Good/`, `Bad/`, `Great/` and `OK/` are created inside
   the folder you open, and a file is never overwritten — collisions gain a
   `_1`, `_2` suffix instead.
-- **Safe failure modes.** Unreadable or corrupt images are reported and skipped
-  instead of crashing the session.
+- **Safe failure modes.** Unreadable or corrupt images are skipped with a
+  status-bar warning, animated GIFs show their first frame, huge images are
+  downscaled for display while the original moves untouched, and permission
+  errors are reported with the operating system's own message.
 
 ### Non-goals (v1.x)
 
@@ -195,7 +204,14 @@ image-swiper --version      # prints "ImageSwiper 0.1.0"
    ```bash
    image-swiper                      # reopens the last folder, or the picker
    image-swiper ~/Pictures/unsorted  # skip the picker
+   image-swiper --dry-run ~/Pictures/unsorted   # rehearse: files are never moved
    ```
+
+   `--dry-run` logs `dry run: would move …` for every decision, updates the
+   counters and undo history exactly as usual, and marks the window title with
+   `(dry run)` — the safe way to try the app on a folder you are not ready to
+   sort. `--config PATH` reads and writes an alternative settings file and
+   `-v` echoes the log to stderr.
 
 2. **Pick a folder.** On a first run ImageSwiper shows a welcome page with a big
    *Select Folder* button and the five folders you opened last. It scans the
@@ -277,11 +293,12 @@ The file is written on first save (when the window closes). A minimal example:
 }
 ```
 
-`theme` is `system`, `light` or `dark`; `last_folder` is reopened at start-up and
-may be `null`. `recent_folders` holds at most five folders, newest first, and
-feeds the welcome page's shortcut list. Unknown keys are ignored with a warning,
-so a file from a newer build still loads. The file is replaced atomically with
-mode `0600`.
+`theme` is `system`, `light` or `dark`; *View → Dark Mode* writes the value when
+the user toggles it, and `system` follows the desktop's colour scheme.
+`last_folder` is reopened at start-up and may be `null`. `recent_folders` holds at
+most five folders, newest first, and feeds the welcome page's shortcut list.
+Unknown keys are ignored with a warning, so a file from a newer build still
+loads. The file is replaced atomically with mode `0600`.
 
 Logs are written to
 `${XDG_DATA_HOME:-~/.local/share}/image-swiper/logs/image-swiper.log`, rotated at
@@ -307,9 +324,12 @@ image-swiper/
 │   │   ├── completion_screen.py # per-category summary, restart/pick/quit
 │   │   ├── swipe_card.py      # one image: drag, rotation, badge, fly-out (gui)
 │   │   ├── swipe_widget.py    # stage: hosts the card, feeds images, forwards swipes
-│   │   ├── animator.py        # fly-in / stage fades, shared timing table
-│   │   ├── branding.py        # generated window icon and welcome logo
-│   │   └── workers.py         # QRunnable adapters: scan, preview decode, move
+│   │   ├── animator.py        # card entrance fade/slide, stage fades, timing
+│   │   ├── workers.py         # thread-pool preview prefetch + cache
+│   │   ├── image_utils.py     # Pillow → QImage/QPixmap conversion
+│   │   ├── theme.py           # light/dark palettes, system preference
+│   │   ├── shortcut_overlay.py # F1/? keyboard reference grid
+│   │   └── branding.py        # generated window icon and welcome logo
 │   ├── core/                  # toolkit-agnostic logic (no Qt imports)
 │   │   ├── image_loader.py    # folder scanning, validation, decode, prefetch
 │   │   ├── sorter.py          # queue cursor, category moves, undo stack
@@ -346,9 +366,9 @@ imports with `ast` and fails on any Qt import below `ui/`. Details and rationale
 | --- | --- | --- |
 | **M0 — Scaffolding** | Layout, packaging, docs, module contracts, CI pipeline | ✅ done |
 | **M1 — Image pipeline** | `image_loader`, EXIF handling, prefetching, fixture tests | ✅ done |
-| **M2 — Swipe UI** | `swipe_card` (card, drag, badge, fly-out), `swipe_widget` stage, main window, welcome/summary pages | ✅ done — deck fly-in (`animator`) remains |
+| **M2 — Swipe UI** | `swipe_card` (card, drag, badge, fly-out), `swipe_widget` stage, main window, welcome/summary pages, deck fly-in (`animator`) | ✅ done |
 | **M3 — Sorting** | `folder_manager`, `sorter`, `file_ops`, collision handling | ✅ done |
-| **M4 — Comfort** | Undo, config UI, summary screen, logging, error reporting, rescan/full-screen/shortcut keys, shortcut overlay | 🟡 partial — everything except background workers is done; decode, scan and move still run on the GUI thread |
+| **M4 — Comfort** | Undo, config UI + dark mode, summary screen, logging, error reporting, rescan/full-screen/shortcut keys, shortcut overlay, prefetch workers, `--dry-run`, edge-case messaging | ✅ done |
 | **M5 — Distribution** | `.desktop` file, icons, AppImage/Flatpak, 1.0 | ⬜ planned |
 
 ---

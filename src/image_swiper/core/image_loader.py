@@ -11,6 +11,8 @@ Public API
     SUPPORTED_EXTENSIONS: frozenset[str]
     ImageLoaderError                source folder missing or unreadable
     natural_key(path)               case-insensitive, numeric-aware sort key
+    subfolders(folder, *, require_images=False, limit=3)
+        Subfolders worth opening when the top level holds no image.
     ImageLoader(source_folder, *, extensions=None, validate=True):
         source_folder, extensions, images, load(), reload(),
         validate_image(path), load_preview(path, max_edge), next_candidates()
@@ -42,6 +44,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from ..utils.file_ops import expand_path
 from ..utils.logging_setup import get_logger
+from .folder_manager import CATEGORIES
 
 LOGGER = get_logger(__name__)
 
@@ -51,6 +54,24 @@ SUPPORTED_EXTENSIONS: frozenset[str] = frozenset(
 DEFAULT_PREVIEW_EDGE = 1600
 
 _SPLIT_DIGITS = re.compile(r"(\d+)")
+
+_SORT_FOLDER_NAMES: frozenset[str] = frozenset(name.casefold() for name in CATEGORIES)
+"""Destination folder names, case-folded; never suggested as a folder to open."""
+
+
+def _normalize_extensions(extensions: Iterable[str] | None) -> frozenset[str]:
+    """Return lower-case extensions with a leading dot, or the defaults.
+
+    Args:
+        extensions: ``None`` for :data:`SUPPORTED_EXTENSIONS`, otherwise
+            extensions given with or without their leading dot.
+
+    Returns:
+        The accepted suffixes, each starting with ``"."`` and case-folded.
+    """
+    if extensions is None:
+        return SUPPORTED_EXTENSIONS
+    return frozenset((ext if ext.startswith(".") else f".{ext}").casefold() for ext in extensions)
 
 
 class ImageLoaderError(Exception):
@@ -65,6 +86,66 @@ def natural_key(path: Path) -> tuple[tuple[int, object], ...]:
             continue
         parts.append((0, int(chunk)) if chunk.isdigit() else (1, chunk))
     return tuple(parts)
+
+
+def subfolders(
+    folder: str | Path,
+    *,
+    require_images: bool = False,
+    limit: int = 3,
+    extensions: Iterable[str] | None = None,
+) -> list[Path]:
+    """Return the immediate subfolders of *folder* that are worth opening next.
+
+    This is the hint layer for the "no images here" message: a folder whose
+    photos all live one level down is a common mistake, so the UI names those
+    subfolders instead of only saying that nothing was found.
+
+    Hidden folders and the sorter's own ``Good``/``Bad``/``Great``/``OK``
+    folders are ignored, because opening a destination folder is never the
+    intended next step.
+
+    Args:
+        folder: Directory to inspect. A missing or unreadable directory yields
+            an empty list instead of raising, so callers can use this as a
+            best-effort hint.
+        require_images: Keep only subfolders that contain at least one file with
+            a supported extension. Only names are checked; nothing is decoded.
+        limit: Maximum number of entries; ``0`` or less means "no limit".
+        extensions: Override for :data:`SUPPORTED_EXTENSIONS`, with or without
+            the leading dot.
+
+    Returns:
+        Matching subfolders, sorted by name with :func:`natural_key`.
+    """
+    root = Path(folder)
+    if not root.is_dir():
+        return []
+    try:
+        entries = list(root.iterdir())
+    except OSError as exc:
+        LOGGER.debug("cannot list %s for a subfolder hint: %s", root, exc)
+        return []
+
+    allowed = _normalize_extensions(extensions)
+    found: list[Path] = []
+    for entry in entries:
+        if entry.name.startswith(".") or entry.name.casefold() in _SORT_FOLDER_NAMES:
+            continue
+        try:
+            if not entry.is_dir():
+                continue
+            if require_images and not any(
+                child.is_file() and child.suffix.casefold() in allowed for child in entry.iterdir()
+            ):
+                continue
+        except OSError as exc:
+            LOGGER.debug("cannot inspect %s: %s", entry, exc)
+            continue
+        found.append(entry)
+
+    found.sort(key=natural_key)
+    return found if limit <= 0 else found[:limit]
 
 
 class ImageLoader:
@@ -93,12 +174,7 @@ class ImageLoader:
         if not root.is_dir():
             raise ImageLoaderError(f"source path is not a folder: {root}")
         self._source_folder = root
-        if extensions is None:
-            self._extensions = SUPPORTED_EXTENSIONS
-        else:
-            self._extensions = frozenset(
-                (ext if ext.startswith(".") else f".{ext}").casefold() for ext in extensions
-            )
+        self._extensions = _normalize_extensions(extensions)
         self._validate = validate
         self._images: tuple[Path, ...] = ()
         self._loaded = False

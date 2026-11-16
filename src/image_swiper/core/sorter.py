@@ -13,10 +13,10 @@ Public API
     UndoError                        nothing restorable, or the file is gone
     MoveRecord(source, destination, category, index, moved_at)
     Sorter(source_folder, *, folder_manager=None, image_loader=None,
-           undo_limit=50, on_record=None):
+           undo_limit=50, on_record=None, dry_run=False):
         current_image(), advance(), categorize(category), undo(),
         images, remaining, remaining_count, index, total, counts, history,
-        finished, reload(), reset()
+        finished, dry_run, reload(), reset()
 
 Semantics
     * ``current_image()`` returns ``None`` once the queue is exhausted.
@@ -29,6 +29,10 @@ Semantics
       ``_N`` variant if that path is now occupied) and puts the image back at
       the position it was taken from. Returns ``None`` for an empty history.
     * The undo stack keeps at most ``undo_limit`` records; ``0`` disables undo.
+    * ``dry_run=True`` walks the exact same state machine — counters, cursor and
+      undo history all move — but no file is touched: ``categorize`` logs
+      ``dry run: would move …`` and ``undo`` logs ``dry run: would restore …``.
+      It is what ``--dry-run`` uses, so the whole UI can be exercised safely.
     * Nothing here imports Qt: the window subscribes via ``on_record`` and
       re-renders, which keeps the core layer headless.
 """
@@ -41,7 +45,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..utils.file_ops import reverse_move
+from ..utils.file_ops import reverse_move, unique_path
 from ..utils.logging_setup import get_logger
 from .folder_manager import Category, FolderManager, normalize_category
 from .image_loader import ImageLoader
@@ -98,6 +102,9 @@ class Sorter:
         undo_limit: Maximum number of moves kept on the undo stack.
         on_record: Optional callback invoked with every new :class:`MoveRecord`;
             the UI uses it to refresh its counters.
+        dry_run: Log the moves instead of performing them. Everything else —
+            cursor, counters and undo history — behaves exactly as it does in a
+            real session, so ``--dry-run`` can rehearse a sort safely.
 
     Raises:
         ValueError: ``undo_limit`` is negative.
@@ -113,6 +120,7 @@ class Sorter:
         image_loader: ImageLoader | None = None,
         undo_limit: int = DEFAULT_UNDO_LIMIT,
         on_record: Callable[[MoveRecord], None] | None = None,
+        dry_run: bool = False,
     ) -> None:
         if undo_limit < 0:
             raise ValueError(f"undo_limit must be zero or positive, got {undo_limit}")
@@ -128,10 +136,12 @@ class Sorter:
         self._history: deque[MoveRecord] = deque()
         self._counts: Counter[Category] = Counter()
         self._on_record = on_record
+        self._dry_run = bool(dry_run)
         LOGGER.info(
-            "sorter ready for %s with %d image(s)",
+            "sorter ready for %s with %d image(s)%s",
             self._folders.source_folder,
             len(self._remaining),
+            " (dry run)" if self._dry_run else "",
         )
 
     def __repr__(self) -> str:
@@ -196,6 +206,11 @@ class Sorter:
         """Moves available for undo, oldest first."""
         return tuple(self._history)
 
+    @property
+    def dry_run(self) -> bool:
+        """``True`` when moves are only logged, never performed."""
+        return self._dry_run
+
     def current_image(self) -> Path | None:
         """Return the image at the cursor, or ``None`` when finished."""
         if self._index >= len(self._remaining):
@@ -219,6 +234,10 @@ class Sorter:
     def categorize(self, category: Category | str) -> MoveRecord:
         """Move the current image into ``category`` and return its record.
 
+        In a dry run (``dry_run=True``) nothing is moved: the planned name is
+        resolved with the same collision rules as a real move, the intent is
+        logged at INFO, and the state machine advances exactly as usual.
+
         Args:
             category: One of ``"Good"``, ``"Bad"``, ``"Great"``, ``"OK"``;
                 matched case-insensitively.
@@ -240,7 +259,11 @@ class Sorter:
             self._remaining.pop(self._index)
             raise MissingImageError(f"image disappeared: {current}")
 
-        destination = self._folders.move_image(current, canonical)
+        destination = (
+            unique_path(self._folders.destination_for(canonical), current.name)
+            if self._dry_run
+            else self._folders.move_image(current, canonical)
+        )
         record = MoveRecord(
             source=current,
             destination=destination,
@@ -251,7 +274,10 @@ class Sorter:
         self._processed += 1
         self._counts[canonical] += 1
         self._push_history(record)
-        LOGGER.info("categorised %s as %s", current.name, canonical)
+        if self._dry_run:
+            LOGGER.info("dry run: would move %s -> %s [%s]", current.name, destination, canonical)
+        else:
+            LOGGER.info("categorised %s as %s", current.name, canonical)
         if self._on_record is not None:
             self._on_record(record)
         return record
@@ -271,14 +297,18 @@ class Sorter:
             return None
 
         record = self._history.pop()
-        if not record.destination.exists():
-            self._history.append(record)
-            LOGGER.error("cannot undo, %s no longer exists", record.destination)
-            raise UndoError(f"cannot undo: {record.destination} no longer exists")
+        if self._dry_run:
+            restored = record.source
+            LOGGER.info("dry run: would restore %s from %s/", record.filename, record.category)
+        else:
+            if not record.destination.exists():
+                self._history.append(record)
+                LOGGER.error("cannot undo, %s no longer exists", record.destination)
+                raise UndoError(f"cannot undo: {record.destination} no longer exists")
 
-        restored = reverse_move(record.source, record.destination)
-        if restored != record.source:
-            LOGGER.warning("original name was taken; restored as %s", restored)
+            restored = reverse_move(record.source, record.destination)
+            if restored != record.source:
+                LOGGER.warning("original name was taken; restored as %s", restored)
 
         insert_at = min(record.index, len(self._remaining))
         self._remaining.insert(insert_at, restored)
@@ -289,7 +319,8 @@ class Sorter:
             self._counts[record.category] = remaining_for_category
         else:
             self._counts.pop(record.category, None)
-        LOGGER.info("undid move of %s from %s", record.filename, record.category)
+        if not self._dry_run:
+            LOGGER.info("undid move of %s from %s", record.filename, record.category)
         return record
 
     def reload(self) -> list[Path]:

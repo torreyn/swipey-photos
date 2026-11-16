@@ -27,12 +27,14 @@ Public API
         card -> SwipeCard
     class SwipeWidget(QWidget):
         swipe_committed: pyqtSignal(str)   # category name, forwarded
-        show_image(pixmap, *, caption="") -> None
+        show_image(pixmap, *, caption="", from_direction=None) -> None
         clear() -> None
         is_empty() -> bool
         trigger_swipe(category) -> None
         set_interactive(enabled) -> None
         card -> SwipeCard
+        animator -> CardAnimator
+        legend -> QLabel                  # the "← Bad ↓ OK ↑ Great → Good" hint
 
 Geometry contract
     The card positions *itself* while being dragged, so it must not be put in a
@@ -45,6 +47,14 @@ Input rules
       decision cannot be started while the previous move is still running.
     * The card is given focus after :meth:`SwipeWidget.show_image`, which keeps
       arrow keys working without the window doing anything special.
+    * The legend line under the card repeats the key map, because the buttons
+      alone do not tell a first-time user which gesture means what.
+
+Animation
+    Handing over an image also starts the deck-level entrance animation through
+    :class:`~image_swiper.ui.animator.CardAnimator`: the new card fades in over
+    150 ms, and slides in from the opposite side when the window passes the
+    direction of the previous decision. ``animation_ms=0`` makes it instant.
 """
 
 from __future__ import annotations
@@ -53,10 +63,18 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap, QResizeEvent
 from PyQt6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
+from .animator import DEFAULT_DURATION_MS, CardAnimator
 from .swipe_card import SwipeCard
 
 CAPTION_STYLE = "color: palette(mid); font-size: 11pt;"
 """Stylesheet for the filename line under the card."""
+
+LEGEND_TEXT = "← Bad    ↓ OK    ↑ Great    → Good"
+"""The gesture reminder shown under the card; mirrors the README key table."""
+
+LEGEND_STYLE = "color: palette(mid); font-size: 10pt; letter-spacing: 1px;"
+"""Stylesheet for the gesture legend: present, but never louder than the photo."""
+
 
 STAGE_MARGIN = 0
 """Inset the stage leaves around the card.
@@ -110,13 +128,17 @@ class SwipeWidget(QWidget):
         *,
         margin: int = STAGE_MARGIN,
         show_caption: bool = True,
+        show_legend: bool = True,
+        animation_ms: int = DEFAULT_DURATION_MS,
     ) -> None:
-        """Build the stage, the card and the optional filename caption.
+        """Build the stage, the card, the caption and the gesture legend.
 
         Args:
             parent: Optional Qt parent.
             margin: Inset between the stage edge and the card, in pixels.
             show_caption: Display a filename line under the card.
+            show_legend: Display the ``← Bad ↓ OK ↑ Great → Good`` reminder.
+            animation_ms: Duration of the entrance animation; ``0`` disables it.
         """
         super().__init__(parent)  # type: ignore[arg-type]  # PyQt6 types parent as Self
         self.setObjectName("swipe_widget")
@@ -131,13 +153,24 @@ class SwipeWidget(QWidget):
         self._caption.setStyleSheet(CAPTION_STYLE)
         self._caption.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
 
+        self._legend = QLabel(LEGEND_TEXT, self)
+        self._legend.setObjectName("swipe_legend")
+        self._legend.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._legend.setStyleSheet(LEGEND_STYLE)
+        self._legend.setToolTip("Drag the card, or press the arrow key shown")
+        self._legend.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self._legend.setVisible(show_legend)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
         layout.addWidget(self._stage, stretch=1)
         if show_caption:
             layout.addWidget(self._caption)
+        if show_legend:
+            layout.addWidget(self._legend)
 
+        self._animator = CardAnimator(self._stage, duration_ms=animation_ms, parent=self)
         self._stage.card.swiped.connect(self._on_swiped)
         self._set_caption("")
 
@@ -150,22 +183,43 @@ class SwipeWidget(QWidget):
         """The card this stage hosts; use it for demos, tests and shortcuts."""
         return self._stage.card
 
-    def show_image(self, pixmap: QPixmap | None, *, caption: str = "") -> None:
+    @property
+    def animator(self) -> CardAnimator:
+        """The deck-level animator used for entrances and stage fades."""
+        return self._animator
+
+    @property
+    def legend(self) -> QLabel:
+        """The gesture reminder under the card."""
+        return self._legend
+
+    def show_image(
+        self,
+        pixmap: QPixmap | None,
+        *,
+        caption: str = "",
+        from_direction: str | None = None,
+    ) -> None:
         """Display *pixmap* on a freshly armed card.
 
         Args:
             pixmap: Already-decoded image; ``None`` shows the empty placeholder.
             caption: Filename or size hint under the card; empty hides the line.
+            from_direction: Category of the previous decision, so the new card
+                enters from the opposite side; ``None`` fades it in place.
         """
         self.card.set_pixmap(pixmap)
         self._has_image = pixmap is not None and not pixmap.isNull()
         self._set_caption(caption)
+        if self._has_image:
+            self._animator.fly_in(self.card, from_direction)
         if self._interactive:
             self.card.setEnabled(True)
             self.card.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def clear(self) -> None:
         """Remove the current image and caption, leaving an empty stage."""
+        self._animator.stop()
         self.card.clear_image()
         self._has_image = False
         self._set_caption("")
