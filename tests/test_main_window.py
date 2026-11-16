@@ -419,6 +419,32 @@ def test_undo_restores_the_last_image(
     assert not undo.isEnabled()
 
 
+def test_undo_paints_the_restored_card(
+    qtbot: QtBot, window: Callable[..., MainWindow], sample_folder: Path
+) -> None:
+    """The restored card is actually on screen, not merely queued again.
+
+    Regression guard: a stage-wide opacity effect sitting above the card's own
+    drop-shadow effect made Qt paint an empty stage after undo, while all the
+    state assertions above still passed. ``IMG_1.jpg`` is a flat image, so the
+    stage centre must show its colour.
+    """
+    created = window()
+    created.open_folder(sample_folder)
+    commit(qtbot, created, "Good")
+    undo = created.findChild(QAction, "action_undo")
+    assert undo is not None
+    undo.trigger()
+    qtbot.waitUntil(lambda: created.swipe_widget.card.fade == pytest.approx(1.0), timeout=5000)
+
+    stage = created.swipe_widget
+    grabbed = stage.grab().toImage()
+    painted = grabbed.pixelColor(grabbed.width() // 2, grabbed.height() // 2)
+    assert abs(painted.red() - 37) <= 8  # make_images(): (IMG_1 * 37 % 256, 80, 160)
+    assert abs(painted.green() - 80) <= 8
+    assert abs(painted.blue() - 160) <= 8
+
+
 def test_undo_from_the_summary_returns_to_the_stage(
     qtbot: QtBot,
     window: Callable[..., MainWindow],

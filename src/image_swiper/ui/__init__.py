@@ -22,8 +22,8 @@ Contains
                         feeds it pixmaps, shows the gesture legend and forwards
                         committed categories.
     animator.py         CardAnimator: deck-level choreography (150 ms card
-                        entrance fade/slide, stage fades) and the shared
-                        timing/easing policy.
+                        entrance fade/slide) and the shared timing/easing
+                        policy.
     workers.py          PreviewPrefetcher/PreviewWorker: decode upcoming previews
                         on a bounded QThreadPool and hand them back as QImages.
     image_utils.py      Pillow → QImage/QPixmap conversion, the only bridge

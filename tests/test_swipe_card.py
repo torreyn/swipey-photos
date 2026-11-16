@@ -2,6 +2,8 @@
 
 Coverage
     * fit-to-area rendering that keeps the aspect ratio, plus the empty state;
+    * the blurred ``QGraphicsDropShadowEffect`` and the ``resizeEvent`` refit of
+      the scaled-pixmap cache;
     * drag translation, proportional/clamped rotation and threshold maths,
       including the dominant-axis rule for diagonal drags;
     * commit versus spring-back on release, and the category emitted once the
@@ -29,10 +31,16 @@ from typing import TYPE_CHECKING
 import pytest
 from PyQt6.QtCore import QEvent, QPoint, QPointF, Qt
 from PyQt6.QtGui import QColor, QMouseEvent, QPixmap
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QGraphicsDropShadowEffect
 
 from image_swiper.ui import swipe_card
-from image_swiper.ui.swipe_card import DEFAULT_MARGIN, SwipeCard
+from image_swiper.ui.swipe_card import (
+    DEFAULT_MARGIN,
+    DEFAULT_SHADOW_ALPHA,
+    DEFAULT_SHADOW_BLUR,
+    DEFAULT_SHADOW_OFFSET_Y,
+    SwipeCard,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -153,6 +161,49 @@ def test_scaled_pixmap_fits_the_card_without_distortion(card: SwipeCard) -> None
     assert scaled.height() <= usable_height
     assert scaled.width() == usable_width or scaled.height() == usable_height
     assert scaled.width() / scaled.height() == pytest.approx(300 / 200, rel=0.01)
+
+
+def test_card_is_lifted_by_a_blurred_drop_shadow(card: SwipeCard) -> None:
+    """The plate gets a real ``QGraphicsDropShadowEffect``, configured quietly."""
+    effect = card.shadow_effect
+    assert isinstance(effect, QGraphicsDropShadowEffect)
+    assert card.graphicsEffect() is effect
+    assert effect.blurRadius() == pytest.approx(float(DEFAULT_SHADOW_BLUR))
+    assert effect.offset() == QPointF(0.0, DEFAULT_SHADOW_OFFSET_Y)
+    assert effect.color().alpha() == DEFAULT_SHADOW_ALPHA
+
+
+def test_shadow_blur_is_configurable(qtbot: QtBot) -> None:
+    """``shadow_blur=0`` keeps the effect but drops the blur (cheap in tests)."""
+    widget = swipe_card.SwipeCard(duration_ms=0, shadow_blur=0)
+    qtbot.addWidget(widget)
+    assert widget.shadow_effect is not None
+    assert widget.shadow_effect.blurRadius() == pytest.approx(0.0)
+
+
+def test_resizing_refits_the_cached_image(qtbot: QtBot, pixmap: QPixmap) -> None:
+    """A resize re-fits the cached copy; an unchanged size reuses the same one."""
+    widget = swipe_card.SwipeCard(duration_ms=0)
+    qtbot.addWidget(widget)
+    widget.setGeometry(0, 0, 600, 400)
+    widget.set_pixmap(pixmap)
+
+    first = widget.scaled_pixmap()
+    assert first is not None
+    assert widget.scaled_pixmap() is first  # cached, not re-scaled per paint
+
+    widget.resize(300, 200)  # resizeEvent re-fits eagerly, keyed by the new area
+    smaller = widget.scaled_pixmap()
+    assert smaller is not None
+    assert smaller is not first
+    assert smaller.width() <= 300 - 2 * DEFAULT_MARGIN
+    assert smaller.height() <= 200 - 2 * DEFAULT_MARGIN
+    assert smaller.width() / smaller.height() == pytest.approx(300 / 200, rel=0.01)
+
+    widget.resize(600, 400)
+    bigger = widget.scaled_pixmap()
+    assert bigger is not None
+    assert bigger.width() > smaller.width()
 
 
 def test_empty_card_paints_a_placeholder(qtbot: QtBot) -> None:

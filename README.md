@@ -43,12 +43,12 @@ configuration and rotating logs. The Qt side is wired up too: the swipe card
 its gesture legend, the welcome screen with recent folders, the completion
 summary and the main window (menus, progress, footer buttons, live status-bar
 counts, config persistence). You can start it with `python -m image_swiper` or
-the installed `image-swiper` script and sort a folder end to end (367 tests,
+the installed `image-swiper` script and sort a folder end to end (369 tests,
 green on Python 3.11–3.13 in CI). The polish pass has landed: 150 ms card
-fade-ins, background prefetch of the next previews, a dark-mode toggle, undo with
-a stage fade, `--dry-run`, and friendly handling of corrupt files, GIFs, huge
-images and folders that only contain subfolders. See the
-[roadmap](#roadmap) for what is next.
+fade-ins, background prefetch of the next previews, a dark-mode toggle, undo,
+`--dry-run`, and friendly handling of corrupt files, GIFs, huge images and
+folders that only contain subfolders. See the [roadmap](#roadmap) for what is
+next.
 
 ---
 
@@ -78,9 +78,9 @@ Planned for v1.0 (see the roadmap for what is already implemented):
   moving through a large folder stays responsive.
 - **Remembers context.** Last folder, window size and theme are persisted to a
   human-editable JSON config; *View → Dark Mode* switches palettes live.
-- **Looks the part.** Rounded card with a soft shadow, a 150 ms fade-in for each
-  new image, a `← Bad ↓ OK ↑ Great → Good` hint under the card and a live
-  per-category summary bar at the bottom.
+- **Looks the part.** Rounded card with a blurred drop shadow, a 150 ms fade-in
+  for each new image, a `← Bad ↓ OK ↑ Great → Good` hint under the card and a
+  live per-category summary bar at the bottom.
 - **Safe to try.** `image-swiper --dry-run FOLDER` logs what it *would* move and
   leaves every file untouched, so you can rehearse a sort first.
 - **Predictable buckets.** `Good/`, `Bad/`, `Great/` and `OK/` are created inside
@@ -324,7 +324,7 @@ image-swiper/
 │   │   ├── completion_screen.py # per-category summary, restart/pick/quit
 │   │   ├── swipe_card.py      # one image: drag, rotation, badge, fly-out (gui)
 │   │   ├── swipe_widget.py    # stage: hosts the card, feeds images, forwards swipes
-│   │   ├── animator.py        # card entrance fade/slide, stage fades, timing
+│   │   ├── animator.py        # card entrance fade/slide, timing, easing
 │   │   ├── workers.py         # thread-pool preview prefetch + cache
 │   │   ├── image_utils.py     # Pillow → QImage/QPixmap conversion
 │   │   ├── theme.py           # light/dark palettes, system preference

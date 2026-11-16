@@ -40,7 +40,7 @@ Feedback
 Public API
     SwipeCard(parent=None, *, duration_ms=250, spring_back_ms=220,
               horizontal_threshold_ratio=0.25, vertical_threshold_ratio=0.20,
-              max_rotation=15.0, margin=12, corner_radius=18)
+              max_rotation=15.0, margin=12, corner_radius=18, shadow_blur=18)
         swiped: pyqtSignal(str)             # "Good" | "Bad" | "Great" | "OK"
         set_pixmap(pixmap, *, reset=True)   # show the next image
         set_image(path)                     # convenience for demos and tests
@@ -48,10 +48,21 @@ Public API
         trigger_swipe(category)             # keyboard or programmatic commit
         reset(*, animated=False)            # reuse the card for the next image
         scaled_pixmap()                     # what is actually drawn
+        shadow_effect                       # the QGraphicsDropShadowEffect
         direction_for_offset(offset), progress_for_offset(offset)
         pixmap, fade, rotation, drag_offset, progress, direction,
         is_animating, home_position, max_rotation, horizontal_threshold,
         vertical_threshold
+
+Rendering
+    The plate is a rounded rectangle inset by ``margin``, which is what gives
+    the ``QGraphicsDropShadowEffect`` room to spread outside it. The image is
+    fitted with ``KeepAspectRatio`` and cached per drawing area, so a resize
+    re-scales once and every later paint is a blit: ``resizeEvent`` re-fits the
+    cache eagerly instead of leaving the smooth downscale inside the paint that
+    follows it. The effect re-blurs its source whenever the card repaints with a
+    new transform, which is why the default blur radius stays modest (18 px);
+    translation alone does not invalidate it, so the fly-out is cheap.
 
 Threading and lifetime
     Everything runs on the GUI thread. The animations are
@@ -68,6 +79,7 @@ Standalone demo (no session, no files, no other module)::
 
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
 from typing import ClassVar
@@ -98,7 +110,10 @@ from PyQt6.QtGui import (
     QPixmap,
     QResizeEvent,
 )
-from PyQt6.QtWidgets import QApplication, QWidget
+from PyQt6.QtWidgets import QApplication, QGraphicsDropShadowEffect, QWidget
+
+LOGGER = logging.getLogger(__name__)
+"""Module logger; only used for teardown diagnostics, so the card stays standalone."""
 
 GOOD = "Good"
 BAD = "Bad"
@@ -128,6 +143,20 @@ DEFAULT_MARGIN = 12
 
 DEFAULT_CORNER_RADIUS = 18
 """Corner radius of the card plate, in pixels."""
+
+DEFAULT_SHADOW_BLUR = 18
+"""Blur radius of the drop shadow, in pixels.
+
+The blur is deliberately modest: a ``QGraphicsDropShadowEffect`` re-blurs its
+source whenever the card repaints with a new transform, and a large radius makes
+dragging measurably heavier (see the rendering notes in the module docstring).
+"""
+
+DEFAULT_SHADOW_OFFSET_Y = 6.0
+"""Vertical offset of the drop shadow, so the plate reads as lifted off the stage."""
+
+DEFAULT_SHADOW_ALPHA = 80
+"""Opacity of the shadow colour: present, but quiet enough not to look like a border."""
 
 _EXIT_MARGIN = 24
 """Extra pixels the card travels past the window edge so it is fully gone."""
@@ -241,6 +270,7 @@ class SwipeCard(QWidget):
         max_rotation: float = DEFAULT_MAX_ROTATION,
         margin: int = DEFAULT_MARGIN,
         corner_radius: int = DEFAULT_CORNER_RADIUS,
+        shadow_blur: int = DEFAULT_SHADOW_BLUR,
     ) -> None:
         """Create an empty card that is ready to accept a pixmap.
 
@@ -259,6 +289,9 @@ class SwipeCard(QWidget):
             margin: Inset between the widget edge and the card, leaving room
                 for the shadow.
             corner_radius: Corner radius of the card plate in pixels.
+            shadow_blur: Blur radius of the ``QGraphicsDropShadowEffect`` in
+                pixels. ``0`` leaves a hard-edged shadow, which is a cheap way
+                to check the card's geometry.
         """
         super().__init__(parent)  # type: ignore[arg-type]  # PyQt6 types parent as Self
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -272,6 +305,8 @@ class SwipeCard(QWidget):
         self._max_rotation = abs(float(max_rotation))
         self._margin = max(0, int(margin))
         self._corner_radius = max(0, int(corner_radius))
+        self._shadow_blur = max(0, int(shadow_blur))
+        self._shadow: QGraphicsDropShadowEffect | None = None
 
         self._pixmap: QPixmap | None = None
         self._scaled: QPixmap | None = None
@@ -293,6 +328,8 @@ class SwipeCard(QWidget):
         self._transition: str | None = None
         self._pending_category: str | None = None
         self._animating = False
+
+        self._install_shadow()
 
     # ------------------------------------------------------------------
     # Qt properties: animation targets that painters and tests can read
@@ -394,6 +431,15 @@ class SwipeCard(QWidget):
     def max_rotation(self) -> float:
         """Tilt in degrees reached at the horizontal threshold."""
         return self._max_rotation
+
+    @property
+    def shadow_effect(self) -> QGraphicsDropShadowEffect | None:
+        """The ``QGraphicsDropShadowEffect`` that lifts the plate off the stage.
+
+        Exposed for tests and for an owner that wants to tune the blur at
+        runtime; ``None`` only if Qt never installed it.
+        """
+        return self._shadow
 
     @property
     def horizontal_threshold(self) -> float:
@@ -673,9 +719,42 @@ class SwipeCard(QWidget):
             self._home_pos = self.pos()
         super().moveEvent(event)
 
+    def resizeEvent(self, event: QResizeEvent | None) -> None:
+        """Re-fit the cached image to the new widget size.
+
+        The scaled copy is cached per drawing area, so the key changes with the
+        size; re-fitting here instead of in :meth:`paintEvent` moves the smooth
+        downscale out of the paint that follows a resize, and Qt coalesces
+        resizes, so a drag of the window edge still re-scales only as often as
+        it repaints.
+        """
+        super().resizeEvent(event)
+        try:
+            self.scaled_pixmap()
+        except RuntimeError:  # pragma: no cover - resized after deletion
+            LOGGER.debug("card resized after its C++ object was deleted")
+
     def paintEvent(self, event: QPaintEvent | None) -> None:
-        """Paint the plate, the image, the shadow and the feedback badge."""
+        """Paint the plate, the image and the feedback badge.
+
+        The drop shadow is not painted here: it is a
+        ``QGraphicsDropShadowEffect`` installed on the widget, so Qt composites
+        it from whatever the card draws, including the rotation.
+
+        The body is guarded because Qt can deliver a queued paint event to a
+        widget whose C++ object is already gone — a card deleted mid-animation
+        (window closing, or a test tearing a stage down) leaves exactly that
+        behind — and touching it raises ``RuntimeError`` instead of drawing.
+        There is nothing left to show at that point, so the event is dropped.
+        """
         del event
+        try:
+            self._paint_card()
+        except RuntimeError:  # pragma: no cover - painted after deletion
+            LOGGER.debug("card painted after its C++ object was deleted")
+
+    def _paint_card(self) -> None:
+        """Draw the plate, its image and the badge; split out to be guarded."""
         area = self._image_area()
         painter = QPainter(self)
         painter.setRenderHints(
@@ -689,7 +768,6 @@ class SwipeCard(QWidget):
         painter.translate(centre)
         painter.rotate(self._rotation)
         painter.translate(-centre.x(), -centre.y())
-        self._paint_shadow(painter, area)
         self._paint_plate(painter, area)
         self._paint_image(painter, area)
         self._paint_badge(painter, area)
@@ -709,13 +787,20 @@ class SwipeCard(QWidget):
         self._scaled = None
         self._scaled_key = None
 
-    def _paint_shadow(self, painter: QPainter, rect: QRectF) -> None:
-        """Draw a soft drop shadow as stacked translucent rounded rectangles."""
-        painter.setPen(Qt.PenStyle.NoPen)
-        radius = float(self._corner_radius)
-        for offset, alpha in ((8.0, 8), (5.0, 12), (2.0, 18)):
-            painter.setBrush(QColor(0, 0, 0, alpha))
-            painter.drawRoundedRect(rect.translated(0.0, offset), radius, radius)
+    def _install_shadow(self) -> None:
+        """Attach the ``QGraphicsDropShadowEffect`` that lifts the plate.
+
+        A real Qt effect is used rather than painted rectangles so the shadow
+        follows the rounded (and, while dragging, rotated) silhouette, and so an
+        embedder can tune or replace it through
+        :attr:`SwipeCard.shadow_effect`.
+        """
+        effect = QGraphicsDropShadowEffect(self)
+        effect.setBlurRadius(float(self._shadow_blur))
+        effect.setOffset(0.0, DEFAULT_SHADOW_OFFSET_Y)
+        effect.setColor(QColor(0, 0, 0, DEFAULT_SHADOW_ALPHA))
+        self.setGraphicsEffect(effect)
+        self._shadow = effect
 
     def _plate_path(self, rect: QRectF) -> QPainterPath:
         """Return the rounded rectangle shared by the plate and the image clip."""

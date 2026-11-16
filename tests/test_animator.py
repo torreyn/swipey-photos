@@ -8,8 +8,8 @@ Coverage
       survives the transition;
     * interruption: a second ``fly_in`` replaces the first, ``stop`` snaps the
       card home without emitting ``finished``;
-    * ``fade_stage``: sets and restores the stage opacity, is a no-op without a
-      stage;
+    * the stage never receives a graphics effect (nesting one above the card's
+      own drop shadow stops Qt from painting the card);
     * robustness: a card deleted mid-flight does not crash the animator and the
       animation objects are reused instead of leaking.
 
@@ -30,7 +30,6 @@ from image_swiper.ui.animator import (
     FLY_IN,
     MAX_DURATION_MS,
     MIN_DURATION_MS,
-    STAGE_FADE,
     CardAnimator,
 )
 from image_swiper.ui.swipe_card import SwipeCard
@@ -188,43 +187,25 @@ def test_animation_objects_are_reused(stage: QWidget, card: SwipeCard) -> None:
     assert len(animator.findChildren(QPropertyAnimation)) == animations
 
 
-def test_fade_stage_sets_and_restores_the_opacity(qtbot: QtBot, stage: QWidget) -> None:
-    """Stage fades report ``stage_fade`` and end on the requested value."""
+def test_animator_never_puts_an_effect_on_the_stage(qtbot: QtBot, stage: QWidget) -> None:
+    """The stage stays effect-free; Qt cannot composite an effect inside one.
+
+    The card carries its own ``QGraphicsDropShadowEffect``. Nesting that inside
+    a stage-wide ``QGraphicsOpacityEffect`` makes Qt stop painting the card as
+    soon as the card moves (the entrance slide), so ``CardAnimator`` must never
+    install an effect on the stage — the entrance fades the card's own painted
+    ``fade`` property instead.
+    """
     animator = CardAnimator(stage, duration_ms=0)
-    emissions: list[str] = []
-    animator.finished.connect(emissions.append)
+    card = SwipeCard(stage)
+    qtbot.addWidget(card)
+    card.setGeometry(stage.rect())
 
-    animator.fade_stage(0.25)
-    dimmed = stage.graphicsEffect()
-    assert dimmed is not None and dimmed.property("opacity") == pytest.approx(0.25)
+    animator.fly_in(card, "Good")
+    animator.stop()
 
-    animator.fade_stage(1.0)
-    assert stage.graphicsEffect() is dimmed
-    assert dimmed.property("opacity") == pytest.approx(1.0)
-    assert emissions == [STAGE_FADE, STAGE_FADE]
-
-
-def test_fade_stage_without_a_stage_is_a_noop(qtbot: QtBot) -> None:
-    """An animator built without a stage simply ignores stage fades."""
-    animator = CardAnimator()
-    emissions: list[str] = []
-    animator.finished.connect(emissions.append)
-
-    animator.fade_stage(0.5)
-
-    assert emissions == []
-
-
-def test_fade_stage_animates_to_the_target(qtbot: QtBot, stage: QWidget) -> None:
-    """A timed fade reaches its target and reports ``stage_fade`` once."""
-    animator = CardAnimator(stage, duration_ms=60)
-
-    with qtbot.waitSignal(animator.finished, timeout=2000) as blocker:
-        animator.fade_stage(0.4)
-
-    effect = stage.graphicsEffect()
-    assert blocker.args == [STAGE_FADE]
-    assert effect is not None and effect.property("opacity") == pytest.approx(0.4)
+    assert stage.graphicsEffect() is None
+    assert card.graphicsEffect() is not None  # the card keeps its drop shadow
 
 
 def test_deleting_the_card_mid_flight_does_not_crash(qtbot: QtBot, stage: QWidget) -> None:

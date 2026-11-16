@@ -89,9 +89,9 @@ tests/
 ├── test_image_loader.py     # scanning, EXIF, corrupt files, preview bounds
 ├── test_logging_setup.py    # rotation, levels, namespace, log directory
 ├── test_sorter.py           # queue cursor, counters, undo, vanished files
-├── test_swipe_card.py       # fit/aspect, drag maths, thresholds, badge, fly-out (gui)
+├── test_swipe_card.py       # fit/aspect, shadow effect, resize refit, drag maths, badge (gui)
 ├── test_swipe_widget.py     # stage: image hand-off, caption, legend, fade-in (gui)
-├── test_animator.py         # card entrance, stage fades, interruption, cleanup (gui)
+├── test_animator.py         # card entrance, interruption, cleanup (gui)
 ├── test_workers.py          # prefetch lookahead, cache, cancellation, failures (gui)
 ├── test_theme.py            # dark/light palettes, system fallback (gui)
 ├── test_welcome_screen.py   # picker, recent-folder list, emit rules (gui)

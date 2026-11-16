@@ -111,7 +111,7 @@ configuration file stays human-editable and greppable.
 | `ui/shortcut_overlay.py` | UI | shortcut reference grid, key-cap styling | read session state or files |
 | `ui/swipe_card.py` | UI | one image: fit, drag maths, badge, fly-out, keys | know about folders, files or categories on disk |
 | `ui/swipe_widget.py` | UI | stage geometry, image hand-off, caption and legend, signal forwarding | touch the filesystem |
-| `ui/animator.py` | UI | card entrance fade/slide, stage fades, timing and easing | know about `Path` or config files |
+| `ui/animator.py` | UI | card entrance fade/slide, timing and easing | know about `Path` or config files |
 | `ui/workers.py` | UI↔core | thread-pool preview prefetch, cache, signal marshalling | mutate widgets or decode into `QPixmap` |
 | `ui/image_utils.py` | UI↔core | Pillow → `QImage`/`QPixmap` conversion | own policy or I/O |
 | `ui/theme.py` | UI | light/dark palettes and the system-preference fallback | contain widget-specific colours |
@@ -185,7 +185,7 @@ itself. Its slots translate UI intent into core calls:
 | `View → Dark Mode` | swaps the application palette (`ui/theme.py`) between light and dark and persists the choice |
 | `View → Full Screen` (F11) | `showFullScreen()`/`showNormal()`, with the menu tick resynchronised in `changeEvent` |
 | `Help → Keyboard Shortcuts` (F1, ?) | `ShortcutOverlay.show_overlay()`, one reused non-modal dialog |
-| `File → Undo Last` (Ctrl+Z) | `Sorter.undo()`, fade the stage, re-show the restored image, return to the stage |
+| `File → Undo Last` (Ctrl+Z) | `Sorter.undo()`, re-show the restored image (with the deck's entrance animation), return to the stage |
 | skip `QAction` (Space) | `Sorter.advance()`; the file stays in the folder |
 | `CompletionScreen.open_source_requested` | rescan the same folder |
 | `CompletionScreen.pick_folder_requested` | `QFileDialog` → `open_folder()` |
@@ -217,6 +217,16 @@ comes from `StandardKey.Open`/`Undo` plus literal sequences. `SHORTCUT_GROUPS` i
 `ui/shortcut_overlay.py` is the documentation table, and
 `tests/test_main_window.py` asserts that every bound `QAction` shortcut appears
 in it, so a new binding cannot ship undocumented.
+
+**`SwipeCard`** owns one image and one gesture. It paints a rounded plate inset
+by `margin`, clips the image to that plate, and leaves the shadow to a
+`QGraphicsDropShadowEffect` (18 px blur, 6 px offset, black at 31 % alpha), so
+the shadow follows the rounded — and, while dragging, rotated — silhouette
+without a second painting pass of its own. `scaled_pixmap()` caches the fitted
+image per drawing area and `resizeEvent` re-fits that cache, so a resize pays for
+one smooth downscale instead of leaving it inside the paint that follows. Qt
+re-blurs the effect whenever the card repaints with a new transform, which is why
+the radius stays modest; translation alone (the fly-out) reuses the cached blur.
 
 **`SwipeWidget`** is the stage: a `CardStage` that assigns the card geometry in
 `resizeEvent` (the card cannot live in a layout because it moves itself), plus a
@@ -283,16 +293,23 @@ drag is aborted (220 ms). The stage-level transitions are:
 | Transition | What it does | Signal |
 | --- | --- | --- |
 | `fly_in(card, from_direction=None)` | fades the new card in over 150 ms and, when a direction is known, slides it in from the opposite side | `finished("fly_in")` |
-| `fade_stage(opacity)` | dims or restores the whole stage (used around undo) | `finished("stage_fade")` |
 | `stop()` | stops everything and snaps the card home, fully opaque | none |
 
 The animator keeps **one** `QParallelAnimationGroup` with two reusable
-`QPropertyAnimation` objects for cards (`fade`, `pos`) and one group for the
-stage (`QGraphicsOpacityEffect.opacity`). Targets are retargeted per transition
-instead of creating and deleting animations, which is the classic source of
-shutdown crashes. `set_duration()` clamps to 60–600 ms and `0` disables
+`QPropertyAnimation` objects for cards (`fade`, `pos`). Targets are retargeted per
+transition instead of creating and deleting animations, which is the classic
+source of shutdown crashes. `set_duration()` clamps to 60–600 ms and `0` disables
 animation entirely (the reduced-motion path); `finished` fires exactly once per
 completed transition, never for an interrupted one.
+
+The stage itself never receives a `QGraphicsOpacityEffect`. Qt composites a
+widget effect by rendering that widget's subtree, and that path breaks as soon as
+a child carrying its own effect — the card's drop shadow — moves: the stage ends
+up painting **nothing**, which is exactly what an earlier "dim the stage during
+undo" implementation did. Entrances therefore fade the card's painted `fade`
+property, and `tests/test_animator.py` asserts the stage stays effect-free. Undo
+re-shows the restored card through that same entrance, which is cue enough
+without a second mechanism.
 
 The card exposes `lock_home()`/`unlock_home()` so an entrance slide cannot be
 mistaken for a new resting position by `moveEvent`.

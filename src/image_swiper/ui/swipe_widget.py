@@ -185,7 +185,7 @@ class SwipeWidget(QWidget):
 
     @property
     def animator(self) -> CardAnimator:
-        """The deck-level animator used for entrances and stage fades."""
+        """The deck-level animator used for card entrances."""
         return self._animator
 
     @property

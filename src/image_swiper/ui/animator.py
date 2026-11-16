@@ -2,12 +2,11 @@
 
 Responsibility
     Sequence what happens *around* a card: the replacement card fading (and,
-    when a direction is known, sliding) in after a commit, stage fades during a
-    batch action such as undo, and the timing policy the whole UI shares. The
-    per-card transitions already live where they belong — the card flies itself
-    out on commit and springs itself back when a drag is aborted (see
-    :class:`~image_swiper.ui.swipe_card.SwipeCard`) — so ``CardAnimator`` owns
-    only the transitions the stage drives.
+    when a direction is known, sliding) in after a commit, plus the timing
+    policy the whole UI shares. The per-card transitions already live where they
+    belong — the card flies itself out on commit and springs itself back when a
+    drag is aborted (see :class:`~image_swiper.ui.swipe_card.SwipeCard`) — so
+    ``CardAnimator`` owns only the transitions the stage drives.
 
     It also decides what to do when input arrives mid-animation: the running
     animation is stopped, the affected widget is snapped to a defined state and
@@ -16,10 +15,9 @@ Responsibility
 Public API
     DEFAULT_DURATION_MS, MIN_DURATION_MS, MAX_DURATION_MS   timing policy
     class CardAnimator(QObject):
-        finished: pyqtSignal(str)      # "fly_in" | "stage_fade"
+        finished: pyqtSignal(str)      # "fly_in"
         __init__(stage=None, *, duration_ms=DEFAULT_DURATION_MS, parent=None)
         fly_in(card, from_direction=None)
-        fade_stage(opacity)
         stop()
         set_duration(duration_ms)
         duration_ms -> int
@@ -29,17 +27,23 @@ Design notes
       are clamped to 60-600 ms; ``set_duration(0)`` disables animation and makes
       every transition instant, which is how reduced-motion users are served
       and what the tests rely on.
-    * Easing: ``OutCubic`` for the fly-in (fast start, soft landing) and
-      ``InOutQuad`` for stage fades, which should not draw attention.
+    * Easing: ``OutCubic`` for the fly-in (fast start, soft landing).
     * One ``QParallelAnimationGroup`` with two reusable ``QPropertyAnimation``
-      objects serves every card, and one group serves the stage. Animations are
-      retargeted with ``setTargetObject`` instead of being created and deleted
-      per gesture: deferred deletions racing against widget destruction are the
-      classic source of shutdown crashes in Qt applications.
+      objects serves every card. Animations are retargeted with
+      ``setTargetObject`` instead of being created and deleted per gesture:
+      deferred deletions racing against widget destruction are the classic
+      source of shutdown crashes in Qt applications.
     * A card destroyed mid-flight is detected through its ``destroyed`` signal,
       which stops the group and drops the reference, so neither the animator nor
       the animations touch a deleted C++ object.
     * Nothing here blocks: no ``QEventLoop`` spinning, no ``wait()``.
+    * The stage itself deliberately gets **no** ``QGraphicsOpacityEffect``. Qt
+      composites a widget effect by rendering that widget's subtree, and a child
+      that carries its own effect (the card's drop shadow) inside an ancestor
+      effect breaks that path as soon as the child moves: the stage then paints
+      nothing at all. Entrances therefore fade the card through its own painted
+      ``fade`` property, which needs no effect and survives being animated while
+      the card also moves.
 """
 
 from __future__ import annotations
@@ -53,7 +57,7 @@ from PyQt6.QtCore import (
     QPropertyAnimation,
     pyqtSignal,
 )
-from PyQt6.QtWidgets import QGraphicsOpacityEffect, QWidget
+from PyQt6.QtWidgets import QWidget
 
 from ..utils.logging_setup import get_logger
 from .swipe_card import SwipeCard
@@ -78,9 +82,6 @@ FLY_IN_MIN_DISTANCE = 32.0
 FLY_IN = "fly_in"
 """Value carried by :attr:`CardAnimator.finished` after a fly-in."""
 
-STAGE_FADE = "stage_fade"
-"""Value carried by :attr:`CardAnimator.finished` after a stage fade."""
-
 _DIRECTION_VECTORS: dict[str, tuple[int, int]] = {
     "good": (1, 0),
     "bad": (-1, 0),
@@ -91,18 +92,17 @@ _DIRECTION_VECTORS: dict[str, tuple[int, int]] = {
 
 
 class CardAnimator(QObject):
-    """Animate the stage around the card: card entrances and stage fades.
+    """Animate the stage around the card: the entrance of a freshly dealt card.
 
     Signals:
-        finished: Emitted with ``"fly_in"`` or ``"stage_fade"`` when a
-            transition completes normally. A transition that is interrupted by
-            :meth:`stop` or by a newer transition emits nothing, so listeners
-            always see exactly one ``finished`` per animation they started.
+        finished: Emitted with ``"fly_in"`` when a transition completes
+            normally. A transition that is interrupted by :meth:`stop` or by a
+            newer transition emits nothing, so listeners always see exactly one
+            ``finished`` per animation they started.
 
     Args:
         stage: Widget that hosts the cards; its size decides how far a fly-in
-            travels and it receives the opacity effect used by
-            :meth:`fade_stage`. ``None`` disables stage fades.
+            travels. ``None`` falls back to the card's own size.
         duration_ms: Transition length in milliseconds; clamped by
             :meth:`set_duration`, and ``0`` means "instant".
         parent: Optional Qt parent.
@@ -126,9 +126,6 @@ class CardAnimator(QObject):
         self._card_group: QParallelAnimationGroup | None = None
         self._card_fade: QPropertyAnimation | None = None
         self._card_slide: QPropertyAnimation | None = None
-        self._stage_group: QParallelAnimationGroup | None = None
-        self._stage_fade_anim: QPropertyAnimation | None = None
-        self._effect: QGraphicsOpacityEffect | None = None
         self._card: SwipeCard | None = None
         self._running: dict[QParallelAnimationGroup, str] = {}
 
@@ -209,49 +206,16 @@ class CardAnimator(QObject):
         self._running[group] = FLY_IN
         group.start()
 
-    def fade_stage(self, opacity: float) -> None:
-        """Animate the stage to *opacity* (0.0 transparent … 1.0 opaque).
-
-        The opacity effect is installed once and kept, so repeated fades reuse
-        the same animation object; asking for a new opacity while a fade is
-        running snaps the current value and animates from there.
-
-        Args:
-            opacity: Target opacity, clamped to ``0.0``-``1.0``.
-        """
-        if self._stage is None:
-            return
-        effect = self._ensure_effect()
-        group = self._ensure_stage_group()
-        animation = self._stage_fade_anim
-        if effect is None or animation is None:  # pragma: no cover - created together
-            return
-
-        target = max(0.0, min(1.0, float(opacity)))
-        self._stop_group(group)
-        animation.setTargetObject(effect)
-        animation.setStartValue(effect.opacity())
-        animation.setEndValue(target)
-        animation.setDuration(max(self._duration_ms, 1))
-
-        if self._duration_ms == 0:
-            effect.setOpacity(target)
-            self.finished.emit(STAGE_FADE)
-            return
-
-        self._running[group] = STAGE_FADE
-        group.start()
-
     def stop(self) -> None:
         """Stop every transition and snap the affected widgets to a stable state.
 
         The card is returned home, fully opaque and with its home tracking
-        restored; the stage is made fully visible again. Nothing is emitted,
-        because an interrupted transition did not finish.
+        restored. Nothing is emitted, because an interrupted transition did not
+        finish.
         """
-        for group in (self._card_group, self._stage_group):
-            if group is not None:
-                self._stop_group(group)
+        group = self._card_group
+        if group is not None:
+            self._stop_group(group)
         card = self._card
         self._release_card()
         if card is not None:
@@ -260,8 +224,6 @@ class CardAnimator(QObject):
                 card.setProperty("fade", 1.0)
             except RuntimeError:  # pragma: no cover - card already deleted
                 LOGGER.debug("card vanished before the animation was stopped")
-        if self._effect is not None:
-            self._effect.setOpacity(1.0)
 
     # ------------------------------------------------------------------
     # Internals: animation objects, retargeting and completion
@@ -284,31 +246,6 @@ class CardAnimator(QObject):
             self._card_fade = fade
             self._card_slide = slide
         return self._card_group
-
-    def _ensure_stage_group(self) -> QParallelAnimationGroup:
-        """Return the reusable stage group, creating its opacity animation once."""
-        if self._stage_group is None:
-            group = QParallelAnimationGroup(self)
-            group.finished.connect(self._on_finished)
-            animation = QPropertyAnimation(group)
-            animation.setPropertyName(b"opacity")
-            animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
-            group.addAnimation(animation)
-            self._stage_group = group
-            self._stage_fade_anim = animation
-        return self._stage_group
-
-    def _ensure_effect(self) -> QGraphicsOpacityEffect | None:
-        """Return the stage opacity effect, installing it on first use."""
-        if self._effect is not None:
-            return self._effect
-        if self._stage is None:
-            return None
-        effect = QGraphicsOpacityEffect(self._stage)
-        effect.setOpacity(1.0)
-        self._stage.setGraphicsEffect(effect)
-        self._effect = effect
-        return effect
 
     def _entry_offset(self, card: SwipeCard, direction: str | None) -> QPoint:
         """Return the offset a card starts from when entering for *direction*.

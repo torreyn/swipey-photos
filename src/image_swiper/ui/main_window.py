@@ -805,9 +805,12 @@ class MainWindow(QMainWindow):
     def _on_undo(self) -> None:
         """Restore the most recently sorted image and show it again.
 
-        The stage dims for a moment while the card is swapped, which makes the
-        "this is the image you just put away" relationship obvious without a
-        dialog. Undo leaves the stage interactive again immediately.
+        The restored card arrives through the deck's normal entrance animation,
+        which is enough of a cue that "this is the image you just put away" is
+        obvious without a dialog; the stage itself never dims, because a
+        stage-wide opacity effect would sit on top of the card's own drop-shadow
+        effect and Qt stops compositing the card in that arrangement. Undo
+        leaves the stage interactive again immediately.
         """
         sorter = self._sorter
         if sorter is None or self._busy:
@@ -823,9 +826,7 @@ class MainWindow(QMainWindow):
             return
         self.show_status_message(f"Restored {record.filename} from {record.category}/")
         self._show_page(PAGE_STAGE)
-        self._swipe.animator.fade_stage(0.35)
         self._load_current_image()
-        self._swipe.animator.fade_stage(1.0)
 
     def _on_skip(self) -> None:
         """Leave the current image in place and show the next one."""
