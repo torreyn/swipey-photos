@@ -721,7 +721,9 @@ Tracked here so the implementation does not silently pick an answer:
 - **M3 (sorting)**: every invariant in §8.3 has a test; undo works for move and
   copy; a simulated permission error leaves the card usable.
 - **M4 (comfort)**: config round-trips, logging captures Qt warnings, undo limit
-  and read-only detection behave as documented in §9.
+  and read-only detection behave as documented in §9; every bound shortcut is
+  listed in the `F1` overlay, and a rescan never loses the counters or the undo
+  history.
 - **M5 (distribution)**: `pip install .` produces a working `image-swiper`
   command on a clean Debian/Fedora/Arch VM; a `.desktop` file launches it.
 
