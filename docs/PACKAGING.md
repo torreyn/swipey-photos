@@ -12,7 +12,7 @@ the binary recipe in [`scripts/build.sh`](../scripts/build.sh) plus
 | `swipey-photos.desktop` | `packaging/` | every menu, dock and task bar |
 | icon theme tree | `packaging/icons/hicolor/` (generated) | the desktop entry's `Icon=` |
 | one-file binary | `scripts/build.sh` + `swipey-photos.spec` | users with Python but no packaging tools |
-| AppDir / AppImage | `packaging/appimage/build-appimage.sh` | users without Python **or** Qt libraries |
+| AppDir / AppImage | `packaging/appimage/build-appimage.sh` | users without Python, who want one file instead of a wheel install |
 | GitHub Release | `.github/workflows/release.yml` | anyone who wants a download instead of a build |
 | Flatpak | not shipped — see [Flatpak](#5-flatpak) | — |
 
@@ -157,7 +157,9 @@ plugins) and Pillow. **Not** bundled: glibc and the X11 client libraries, so a
 minimal container still needs `libxcb-cursor0`, `libxkbcommon-x11-0`, `libegl1`
 and friends — the list is in
 [README → Installation](../README.md#1-system-packages-qt-runtime--python-tooling).
-When you cannot install those, build the AppImage in §4 instead.
+The AppImage in §4 bundles CPython and PyQt6, but the Qt libraries it carries
+still link those same client libraries, so it is an alternative to `pip`, not to
+step 1.
 
 The script verifies `dist/swipey-photos --version` against
 `swipey_photos.__version__`. A deeper manual check, on a throwaway folder:
@@ -189,9 +191,10 @@ where the icon comes from the icon theme instead of the ELF header.
 ## 4. AppImage
 
 `packaging/appimage/build-appimage.sh` produces a single file that runs on any
-x86-64 Linux distribution — no Python, no PyQt6, no `pip`. Every tagged release
-attaches it as `swipey-photos-<tag>-linux-x86_64.AppImage`; the commands below
-rebuild it from the checkout.
+x86-64 Linux distribution — no Python, no PyQt6, no `pip` (the X11/EGL client
+libraries still come from the system, exactly as for the binary in §3). Every
+tagged release attaches it as `swipey-photos-<tag>-linux-x86_64.AppImage`; the
+commands below rebuild it from the checkout.
 
 ```bash
 uv python install 3.13                                   # relocatable CPython
@@ -248,6 +251,13 @@ starts a session and finds the images. `--appimage-extract` shows `AppRun`,
 app under `usr/lib/python3.13/site-packages/swipey_photos/`.
 `tests/test_packaging.py` pins the script's syntax, `--help`, the FUSE fallback
 and the release job.
+
+The bundle is not self-contained: `ldd` over PyQt6's own Qt libraries lists about
+sixty host libraries (X11, `libxcb-*`, EGL/GL, fontconfig, D-Bus, Wayland,
+`libstdc++`). That is why the import check runs on a machine with the README
+packages installed — and why the release job installs them before staging, after
+a first attempt failed on `libEGL.so.1` — and why the script's error message
+now names the Requirements section.
 
 ---
 

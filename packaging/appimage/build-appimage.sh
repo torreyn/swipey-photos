@@ -192,7 +192,11 @@ cp "$SCRIPT_DIR/../icons/hicolor/scalable/apps/swipey-photos.svg" "$APP_DIR/swip
 
 printf 'Staged %s\n' "$APP_DIR"
 "$BUNDLED_PY" -c 'import swipey_photos, PyQt6.QtWidgets, PIL; print("bundle check:", swipey_photos.__file__)' \
-    || fail "the staged bundle cannot import its dependencies"
+    || fail "the staged bundle cannot import its dependencies
+  PyQt6 is inside the bundle, but its Qt libraries still link the host's X11/
+  EGL client libraries. Install the packages listed under Requirements in the
+  README ('libEGL.so.1: cannot open shared object file' names the first one) and
+  rerun."
 
 if [ "$STAGING_ONLY" -eq 1 ]; then
     printf 'Skipping appimagetool (--staging-only)\n'

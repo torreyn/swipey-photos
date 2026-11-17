@@ -245,11 +245,12 @@ required. To build it yourself:
 [`swipey-photos.spec`](swipey-photos.spec), so a local build and the published
 asset cannot drift apart.
 
-**AppImage — no Python and no Qt libraries**
+**AppImage — no Python, no PyQt6**
 
-The same release also carries `swipey-photos-<tag>-linux-x86_64.AppImage`, which
-adds the PyQt6/Qt libraries and the X11 client packages to the bundle, so it
-starts on a bare Debian, Fedora or Arch install (~84 MB, no `pip`, no apt step):
+The same release also carries `swipey-photos-<tag>-linux-x86_64.AppImage`
+(~84 MB): CPython and PyQt6 are inside the file, so there is no `pip`, no venv
+and no wheel to install. The X11/EGL client libraries from step 1 are still
+needed — any desktop that already runs Qt applications has them.
 
 ```bash
 chmod +x swipey-photos-v1.0.0-linux-x86_64.AppImage
@@ -297,8 +298,9 @@ Paths, icon regeneration and the AppImage build live in
 > AppImage from the
 > [latest release](https://github.com/torreyn/swipey-photos/releases/latest), or
 > build one with `./scripts/build.sh`. The AppImage from
-> `packaging/appimage/build-appimage.sh` also contains the Qt system libraries,
-> so it needs nothing but a 64-bit Linux desktop. Flatpak is not shipped yet;
+> `packaging/appimage/build-appimage.sh` carries CPython and PyQt6, so only the
+> X11/EGL client libraries from step 1 come from the system. Flatpak is not
+> shipped yet;
 > [`docs/PACKAGING.md`](docs/PACKAGING.md#5-flatpak) explains what a manifest
 > would need.
 

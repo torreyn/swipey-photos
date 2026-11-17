@@ -50,11 +50,11 @@ integration ship together; everything listed below is in the release artefact.
   the config file.
 - **Desktop integration** — `.desktop` entry, generated `hicolor` icon tree
   (`packaging/icons/`), `packaging/install-desktop.sh` for user- or
-  system-wide installs, and an AppImage build script that bundles CPython,
-  PyQt6 and the Qt system libraries.
+  system-wide installs, and an AppImage build script that bundles CPython and
+  PyQt6.
 - **Release artefacts** — the one-file PyInstaller binary and, from the same
   recipe CI runs, `swipey-photos-<tag>-linux-x86_64.AppImage` (84 MB: no Python
-  and no Qt packages to install), next to the wheel and the sdist.
+  or PyQt6 to install), next to the wheel and the sdist.
 - **Buy me a coffee** — the About box has a support button that opens
   <https://buymeacoffee.com/2re.me> in the browser (`ui.branding.SUPPORT_URL`);
   *Close* stays the default action.

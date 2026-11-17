@@ -85,6 +85,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The staged-bundle check imports PyQt6 before the squashfs is written, so
+      # the runner needs the same Qt client libraries the binary job installs.
+      - name: Install the Qt platform libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libegl1 libxkbcommon-x11-0 libxcb-cursor0 \
+            libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 \
+            libxcb-xinerama0 libxcb-randr0
+
       # The bundle embeds CPython, and it has to be a *relocatable* build: a
       # distribution Python links /usr/lib/libpython, which is absent on the
       # user's machine. python-build-standalone (what uv downloads) is not.
