@@ -8,7 +8,7 @@
 # Everything is copied from this directory, so the script works from a source
 # checkout or from the unpacked sdist. It never touches the Python environment:
 # the desktop entry launches the `image-swiper` console script, so install the
-# package first (pip install image-swiper).
+# package first (`pip install .` in the checkout).
 #
 # Packagers staging a package build pass --destdir; cache updates are skipped in
 # that case because the files are not visible at their final paths yet.

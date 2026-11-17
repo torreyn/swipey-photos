@@ -59,7 +59,7 @@ for installations (not for `--destdir`) and are skipped when the helper tool or
 ### System-wide installation
 
 ```bash
-sudo pip install image-swiper          # or: pipx install image-swiper
+sudo pip install .                     # or: sudo pipx install .
 sudo ./packaging/install-desktop.sh --prefix /usr
 ```
 

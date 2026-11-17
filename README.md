@@ -43,10 +43,10 @@ configuration and rotating logs. The Qt side is wired up too: the swipe card
 (drag physics, rotation, directional feedback, drop shadow, fly-out), the stage
 around it with its gesture legend, the welcome screen with recent folders, the
 completion summary and the main window (menus, progress, footer buttons, live
-status-bar counts, config persistence). Install it with `pip install image-swiper`,
-run it with `image-swiper` or `python -m image_swiper`, and sort a folder end to
-end (388 tests, green on Python 3.11–3.13 in CI). `packaging/` adds the
-`.desktop` entry, the generated icon theme and an AppImage build script — see
+status-bar counts, config persistence). Install it from a checkout with
+`pip install .`, run it with `image-swiper` or `python -m image_swiper`, and sort a
+folder end to end (388 tests, green on Python 3.11–3.13 in CI). `packaging/` adds
+the `.desktop` entry, the generated icon theme and an AppImage build script — see
 [`docs/PACKAGING.md`](docs/PACKAGING.md).
 
 ---
