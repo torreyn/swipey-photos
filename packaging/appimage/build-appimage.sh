@@ -22,7 +22,8 @@
 # appimagetool is fetched separately from the upstream project
 # (https://github.com/AppImage/appimagetool/releases). Set APPIMAGETOOL to a
 # local copy, or run with --staging-only and package the AppDir later.
-# This step is not part of CI: it needs the network and produces a ~150 MB file.
+# .github/workflows/release.yml runs this same script and attaches the result to
+# the tag, so a local build and the published asset cannot drift apart.
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
@@ -212,5 +213,23 @@ fi
 ARCH=$(uname -m)
 TARGET=$OUTPUT/swipey-photos-$VERSION-$ARCH.AppImage
 printf 'Packaging %s\n' "$TARGET"
-ARCH=$ARCH "$APPIMAGETOOL" "$APP_DIR" "$TARGET"
-printf 'Wrote %s\n' "$TARGET"
+
+# appimagetool is itself an AppImage, so its runtime wants libfuse in order to
+# mount. Containers and CI runners usually have neither /dev/fuse nor
+# libfuse.so.2; the runtime can unpack itself instead, which is slower but needs
+# nothing from the host. Offset 8 of any AppImage holds the "AI" magic, which is
+# how a distro build of appimagetool (a plain ELF) is told apart from upstream's.
+APPIMAGETOOL_ARGS=
+if [ "$(dd if="$APPIMAGETOOL" bs=1 skip=8 count=2 2>/dev/null)" = "AI" ]; then
+    if [ ! -e /dev/fuse ] || ! ldconfig -p 2>/dev/null | grep -q 'libfuse\.so\.2'; then
+        printf 'No FUSE here; letting appimagetool unpack itself\n'
+        APPIMAGETOOL_ARGS=--appimage-extract-and-run
+    fi
+fi
+
+# shellcheck disable=SC2086  # APPIMAGETOOL_ARGS is empty or a single flag
+ARCH=$ARCH "$APPIMAGETOOL" $APPIMAGETOOL_ARGS "$APP_DIR" "$TARGET"
+printf 'Wrote %s (%s)\n' "$TARGET" "$(du -h "$TARGET" | cut -f1)"
+if command -v sha256sum >/dev/null 2>&1; then
+    printf 'sha256 %s\n' "$(sha256sum "$TARGET" | cut -d' ' -f1)"
+fi

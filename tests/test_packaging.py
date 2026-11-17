@@ -291,6 +291,16 @@ def test_appimage_builder_documents_its_contract() -> None:
     assert "APPIMAGE_PIP_ARGS" in result.stdout
 
 
+def test_appimage_builder_copes_with_a_machine_without_fuse() -> None:
+    """CI runners and containers have no libfuse, so appimagetool must self-extract."""
+    script = BUILDER.read_text(encoding="utf-8")
+
+    # appimagetool ships as an AppImage: without a runtime it cannot mount itself.
+    assert "--appimage-extract-and-run" in script
+    assert "/dev/fuse" in script
+    assert "libfuse" in script
+
+
 def test_sdist_ships_the_packaging_directory() -> None:
     """Packagers build from the sdist, so it has to contain ``packaging/``."""
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
@@ -378,8 +388,8 @@ def test_ci_workflow_runs_the_gui_tests_under_xvfb() -> None:
     assert "-m gui" in runs
 
 
-def test_release_workflow_attaches_the_binary_to_a_tagged_release() -> None:
-    """A ``v*`` tag produces one release with binary, wheel and sdist."""
+def test_release_workflow_attaches_every_artefact_to_a_tagged_release() -> None:
+    """A ``v*`` tag produces one release with binary, AppImage, wheel and sdist."""
     release = _workflow("release.yml")
     # PyYAML resolves the unquoted `on:` key to boolean True (YAML 1.1).
     triggers = release.get("on") or release.get(True)
@@ -388,13 +398,21 @@ def test_release_workflow_attaches_the_binary_to_a_tagged_release() -> None:
     assert "workflow_dispatch" in triggers
 
     jobs = release["jobs"]
-    assert jobs["publish"]["needs"] == ["binary", "dist"]
+    assert jobs["publish"]["needs"] == ["binary", "appimage", "dist"]
     assert jobs["publish"]["permissions"]["contents"] == "write"
     assert release["permissions"]["contents"] == "read", "only the publish job may write"
 
     binary_runs = _job_runs(release, "binary")
     assert "swipey-photos.spec" in binary_runs
     assert "--version" in binary_runs, "the binary is smoke-tested before it is uploaded"
+
+    # The AppImage is built from the documented recipe, not from a copy of it.
+    appimage_runs = _job_runs(release, "appimage")
+    assert "packaging/appimage/build-appimage.sh" in appimage_runs
+    assert "uv python install" in appimage_runs, "the bundle needs a relocatable CPython"
+    assert "appimagetool-x86_64.AppImage" in appimage_runs
+    assert "APPIMAGE_EXTRACT_AND_RUN=1" in appimage_runs, "runners ship no libfuse2"
+    assert "--version" in appimage_runs, "the AppImage is smoke-tested before it is uploaded"
 
     assert "softprops/action-gh-release" in _job_runs(release, "publish")
     upload = next(

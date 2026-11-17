@@ -18,6 +18,13 @@ artefact. New entries go under `[Unreleased]` and move down when a tag is cut â€
 - The About box has a **Buy me a coffee** button that opens
   <https://buymeacoffee.com/2re.me> in the default browser
   (`ui.branding.SUPPORT_URL`); *Close* stays the default action.
+- Releases now ship an **AppImage** as well:
+  `swipey-photos-<tag>-linux-x86_64.AppImage` is built by
+  `packaging/appimage/build-appimage.sh` and carries CPython, PyQt6 and the Qt
+  system libraries, so it starts on a machine with neither Python nor the README
+  packages (84 MB). The script lets `appimagetool` unpack itself where FUSE is
+  missing, and `.github/workflows/release.yml` builds and smoke-tests the file
+  (`APPIMAGE_EXTRACT_AND_RUN=1 ./â€¦ --version`) before attaching it.
 
 ### Changed
 

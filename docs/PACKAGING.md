@@ -189,7 +189,9 @@ where the icon comes from the icon theme instead of the ELF header.
 ## 4. AppImage
 
 `packaging/appimage/build-appimage.sh` produces a single file that runs on any
-x86-64 Linux distribution — no Python, no PyQt6, no `pip`.
+x86-64 Linux distribution — no Python, no PyQt6, no `pip`. Every tagged release
+attaches it as `swipey-photos-<tag>-linux-x86_64.AppImage`; the commands below
+rebuild it from the checkout.
 
 ```bash
 uv python install 3.13                                   # relocatable CPython
@@ -226,11 +228,26 @@ What the script does:
 ([AppImage/appimagetool](https://github.com/AppImage/appimagetool/releases)); the
 script never downloads anything by itself. Without it, the AppDir is still
 complete, so `--staging-only` plus a manual `appimagetool` call is a valid path.
+Upstream's `appimagetool` is itself an AppImage and needs FUSE to start, so on a
+machine with neither `/dev/fuse` nor `libfuse.so.2` — CI runners, most
+containers — the script reruns it with `--appimage-extract-and-run`.
 
-Verified on the build machine: the staged `AppRun --version` prints the version,
-and `AppRun --dry-run FOLDER` starts the real window offscreen without touching
-the files. `tests/test_packaging.py` checks the script's syntax and `--help`,
-but the AppImage build itself needs the network and is not part of CI.
+Releases carry the result as `swipey-photos-<tag>-linux-x86_64.AppImage`.
+`.github/workflows/release.yml` runs this same script (interpreter from
+`astral-sh/setup-uv`, appimagetool from upstream), so the published file and a
+local build come from one recipe, and the job smoke-tests the file the way a
+FUSE-less runner can: `APPIMAGE_EXTRACT_AND_RUN=1 ./…AppImage --version`.
+
+Verified on the build machine (1.0.0, Python 3.13.16, appimagetool continuous
+`11d54c9`): the AppDir is 269 MB, the AppImage 84 MB. `--version` prints
+`Swipey Photos 1.0.0`, including under `env -i PATH=/usr/bin:/bin`, so no Python
+from the host is involved;
+`QT_QPA_PLATFORM=offscreen ./swipey-photos-1.0.0-x86_64.AppImage --dry-run FOLDER`
+starts a session and finds the images. `--appimage-extract` shows `AppRun`,
+`.DirIcon`, `swipey-photos.desktop`, `swipey-photos.svg` and `usr/`, with the
+app under `usr/lib/python3.13/site-packages/swipey_photos/`.
+`tests/test_packaging.py` pins the script's syntax, `--help`, the FUSE fallback
+and the release job.
 
 ---
 
@@ -288,7 +305,9 @@ The sdist contains everything those steps need, including `packaging/`.
    `swipey-photos --version`.
 7. `./scripts/build.sh`, then `dist/swipey-photos --version` and one real sorting
    session on a scratch folder.
-8. Optional: build the AppImage and start it on a machine without Python.
+8. Optional: `./packaging/appimage/build-appimage.sh`, then run the resulting
+   `build/appimage/swipey-photos-<version>-<arch>.AppImage --version`; on a
+   machine without Python, also start one sorting session. CI builds and
+   attaches the same file on the tag (§4), so this is a rehearsal, not a gate.
 9. Tag `vX.Y.Z` and push it — `.github/workflows/release.yml` attaches the
-   binary, wheel and sdist to the Release. Upload the AppImage by hand if you
-   built one; it is not produced in CI (§4).
+   binary, the AppImage, the wheel and the sdist to the Release.

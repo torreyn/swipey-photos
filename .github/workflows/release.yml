@@ -2,14 +2,17 @@ name: release
 
 # Tag a commit (`git tag -a v1.0.0 -m "1.0.0" && git push origin v1.0.0`) and
 # this workflow attaches the artefacts to the GitHub Release: a one-file Linux
-# binary, the wheel and the sdist.
+# binary, an AppImage that also carries the Qt system libraries, the wheel and
+# the sdist.
 #
 # Manual runs (`workflow_dispatch`) take the tag as an input, so a re-upload
 # after a flaky runner does not need a new tag.
 #
-# The AppImage is *not* built here: packaging/appimage/build-appimage.sh needs
-# appimagetool plus a python-build-standalone interpreter (a ~150 MB download)
-# and is documented as a local/optional step in docs/PACKAGING.md §4.
+# The AppImage job runs packaging/appimage/build-appimage.sh, the same script a
+# maintainer runs locally, so the released file cannot drift from the recipe in
+# docs/PACKAGING.md §4. It downloads a python-build-standalone interpreter and
+# upstream's appimagetool; the script detects that runners have no FUSE and lets
+# appimagetool unpack itself.
 
 on:
   push:
@@ -76,6 +79,56 @@ jobs:
           path: dist/swipey-photos-*
           if-no-files-found: error
 
+  appimage:
+    name: appimage (linux x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The bundle embeds CPython, and it has to be a *relocatable* build: a
+      # distribution Python links /usr/lib/libpython, which is absent on the
+      # user's machine. python-build-standalone (what uv downloads) is not.
+      - uses: astral-sh/setup-uv@v5
+      - name: Install a relocatable CPython
+        run: uv python install 3.13
+
+      # Upstream's appimagetool, the tool the recipe was verified against. It is
+      # itself an AppImage; the build script spots the missing FUSE on runners
+      # and reruns it with --appimage-extract-and-run.
+      - name: Fetch appimagetool
+        run: |
+          curl -sSL -o appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          ./appimagetool --version
+
+      - name: Build the AppImage
+        env:
+          APPIMAGETOOL: ${{ github.workspace }}/appimagetool
+        run: ./packaging/appimage/build-appimage.sh
+
+      # Runners have no libfuse2, so the AppImage is unpacked to a temporary
+      # directory instead of mounted. That still executes the bundled
+      # interpreter, which is what the smoke test is for.
+      - name: Smoke-test the AppImage
+        run: |
+          APPIMAGE=$(ls build/appimage/swipey-photos-*.AppImage)
+          echo "$APPIMAGE"
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          "./$APPIMAGE" --version
+          "./$APPIMAGE" --help > /dev/null
+
+      - name: Name the asset after the tag
+        run: |
+          mv build/appimage/swipey-photos-*.AppImage \
+            "build/appimage/swipey-photos-${TAG}-linux-x86_64.AppImage"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: build/appimage/swipey-photos-*.AppImage
+          if-no-files-found: error
+
   dist:
     name: sdist + wheel
     runs-on: ubuntu-latest
@@ -102,7 +155,7 @@ jobs:
 
   publish:
     name: publish
-    needs: [binary, dist]
+    needs: [binary, appimage, dist]
     runs-on: ubuntu-latest
     permissions:
       contents: write

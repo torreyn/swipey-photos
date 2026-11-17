@@ -62,9 +62,9 @@ counts, config persistence). Install it with `pipx install
 git+https://github.com/torreyn/swipey-photos.git`, download the standalone binary
 from the [latest release](https://github.com/torreyn/swipey-photos/releases/latest),
 or work from a checkout with `pip install .`; then run `swipey-photos` or
-`python -m swipey_photos` and sort a folder end to end (410 tests, green on Python
+`python -m swipey_photos` and sort a folder end to end (411 tests, green on Python
 3.11–3.13 in CI, ~94 % statement coverage). `packaging/` adds the `.desktop`
-entry, the generated icon theme and an AppImage build script, and
+entry, the generated icon theme and the AppImage build that the releases use, and
 `scripts/build.sh` produces the one-file binary — see
 [`docs/PACKAGING.md`](docs/PACKAGING.md). Release history lives in
 [`CHANGELOG.md`](CHANGELOG.md).
@@ -243,9 +243,30 @@ required. To build it yourself:
 
 `scripts/build.sh` and the release workflow share
 [`swipey-photos.spec`](swipey-photos.spec), so a local build and the published
-asset cannot drift apart. For a bundle that also contains the Qt system
-libraries, use the AppImage script instead
-([`docs/PACKAGING.md` §4](docs/PACKAGING.md#4-appimage)).
+asset cannot drift apart.
+
+**AppImage — no Python and no Qt libraries**
+
+The same release also carries `swipey-photos-<tag>-linux-x86_64.AppImage`, which
+adds the PyQt6/Qt libraries and the X11 client packages to the bundle, so it
+starts on a bare Debian, Fedora or Arch install (~84 MB, no `pip`, no apt step):
+
+```bash
+chmod +x swipey-photos-v1.0.0-linux-x86_64.AppImage
+./swipey-photos-v1.0.0-linux-x86_64.AppImage --version
+./swipey-photos-v1.0.0-linux-x86_64.AppImage ~/Pictures/unsorted
+```
+
+To build one yourself — the recipe is the one the release workflow runs:
+
+```bash
+uv python install 3.13                                   # relocatable CPython
+APPIMAGETOOL=/path/to/appimagetool ./packaging/appimage/build-appimage.sh
+# -> build/appimage/swipey-photos-1.0.0-x86_64.AppImage
+```
+
+[`docs/PACKAGING.md` §4](docs/PACKAGING.md#4-appimage) covers the options,
+including `--staging-only` for packaging the AppDir by hand.
 
 ### 3. Verify the installation
 
@@ -272,11 +293,12 @@ Paths, icon regeneration and the AppImage build live in
 > edit `Exec=` in the installed `.desktop` file to the absolute path of the
 > script.
 
-> **No Python on the target machine?** Download the standalone binary from the
+> **No Python on the target machine?** Download the standalone binary or the
+> AppImage from the
 > [latest release](https://github.com/torreyn/swipey-photos/releases/latest), or
-> build one with `./scripts/build.sh`. If you also want the Qt system libraries
-> inside the bundle, `packaging/appimage/build-appimage.sh` produces a
-> single-file AppImage. Flatpak is not shipped yet;
+> build one with `./scripts/build.sh`. The AppImage from
+> `packaging/appimage/build-appimage.sh` also contains the Qt system libraries,
+> so it needs nothing but a 64-bit Linux desktop. Flatpak is not shipped yet;
 > [`docs/PACKAGING.md`](docs/PACKAGING.md#5-flatpak) explains what a manifest
 > would need.
 

@@ -326,9 +326,10 @@ The packaging tests live inside the same `pytest` run: they parse
 `sh -n` the scripts, check the shape of `swipey-photos.spec`, parse both workflow
 files with PyYAML and pin the changelog format. `desktop-file-validate` runs when
 the runner provides it (it is part of `desktop-file-utils`, which the Ubuntu
-image already has). The AppImage build itself is *not* in CI — it needs a
-relocatable CPython plus the network — so it is verified by hand before a
-release (§8); the PyInstaller binary *is* built, in the release workflow only.
+image already has). The AppImage build itself runs only for a `v*` tag, because
+it needs a relocatable CPython plus two downloads (§8); its recipe, its FUSE
+fallback and its release job are pinned here, and the PyInstaller binary *is*
+built, in the release workflow only.
 
 A third job, `package`, builds the sdist and wheel once (Python 3.13), asserts
 that the sdist contains `packaging/swipey-photos.desktop` and the scalable icon,
@@ -337,11 +338,14 @@ installs the wheel into a clean virtual environment and runs
 
 `.github/workflows/release.yml` is separate because it costs real time and only
 runs on a `v*` tag (or by hand with *Run workflow*). It builds the one-file
-binary with the same `swipey-photos.spec` that `scripts/build.sh` uses, smoke-tests
-`--version` and `--help`, runs `python -m build` plus `twine check`, and attaches
-the three assets to the GitHub Release with `generate_release_notes`. The AppImage
-is deliberately not part of it: `appimagetool` and a python-build-standalone
-interpreter are large downloads best done on a workstation (§8).
+binary with the same `swipey-photos.spec` that `scripts/build.sh` uses, builds
+the AppImage with `packaging/appimage/build-appimage.sh`, smoke-tests both
+(`--version`, `--help`), runs `python -m build` plus `twine check`, and attaches
+the four assets to the GitHub Release with `generate_release_notes`. The AppImage
+leg pulls a python-build-standalone interpreter through `astral-sh/setup-uv` and
+upstream's `appimagetool`; runners have no `libfuse2`, so the script falls back to
+`--appimage-extract-and-run` and the smoke test runs the file with
+`APPIMAGE_EXTRACT_AND_RUN=1`.
 
 ## 10. Editor setup (VSCode)
 
