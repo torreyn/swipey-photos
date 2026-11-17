@@ -99,7 +99,7 @@ configuration file stays human-editable and greppable.
                                 │
 ┌───────────────────────────────▼──────────────────────────────────────┐
 │ utils/  (no Qt, no domain knowledge)                                 │
-│   file_ops.py        config.py        logging_setup.py               │
+│   file_ops.py      config.py      logging_setup.py      browser.py   │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -121,6 +121,7 @@ configuration file stays human-editable and greppable.
 | `utils/file_ops.py` | utils | collision-safe move/copy/reverse | know about images |
 | `utils/config.py` | utils | schema, defaults, JSON I/O, XDG paths | scan folders |
 | `utils/logging_setup.py` | utils | handlers, formatting, log paths | import Qt or own app state |
+| `utils/browser.py` | utils | handing a URL to `xdg-open`, `gio open`, then `webbrowser`, with a falsy result when none of them takes it | import Qt or know about the app |
 
 ### Object graph (runtime)
 
@@ -185,7 +186,7 @@ itself. Its slots translate UI intent into core calls:
 | `View → Dark Mode` | swaps the application palette (`ui/theme.py`) between light and dark and persists the choice |
 | `View → Full Screen` (F11) | `showFullScreen()`/`showNormal()`, with the menu tick resynchronised in `changeEvent` |
 | `Help → Keyboard Shortcuts` (F1, ?) | `ShortcutOverlay.show_overlay()`, one reused non-modal dialog |
-| `Help → About` | version, tagline and a *Buy me a coffee* button; `ui.branding.SUPPORT_URL` is opened through `QDesktopServices` |
+| `Help → About` | version, tagline, the support URL as selectable text and a *Buy me a coffee* button; `ui.branding.SUPPORT_URL` goes through `utils.browser.open_in_browser` (`xdg-open` → `gio open` → `webbrowser`), and the status bar names the URL when no launcher takes it |
 | `File → Undo Last` (Ctrl+Z) | `Sorter.undo()`, re-show the restored image (with the deck's entrance animation), return to the stage |
 | skip `QAction` (Space) | `Sorter.advance()`; the file stays in the folder |
 | `CompletionScreen.open_source_requested` | rescan the same folder |

@@ -17,8 +17,10 @@ Composition
     * Menus: *File* → Open Folder (Ctrl+O), Rescan Folder (F5, Ctrl+R), Undo
       Last (Ctrl+Z), Quit (Ctrl+Q); *View* → Dark Mode, Full Screen (F11);
       *Help* → Keyboard Shortcuts (F1, ?) and About; the About box carries the
-      version, the tagline and a *Buy me a coffee* button that opens
-      :data:`ui.branding.SUPPORT_URL`. The status bar shows the
+      version, the tagline, the :data:`ui.branding.SUPPORT_URL` as selectable
+      text and a *Buy me a coffee* button that hands the URL to
+      :func:`utils.browser.open_in_browser`, reporting it in the status bar when
+      the desktop has no browser to hand. The status bar shows the
       source folder on the left and a live per-category summary, with a coloured
       dot per category, plus the remaining images on the right.
     * Window-level ``QAction`` shortcuts for the four categories (arrows and
@@ -61,11 +63,10 @@ from dataclasses import replace
 from functools import partial
 from pathlib import Path
 
-from PyQt6.QtCore import QEvent, QSize, Qt, QUrl
+from PyQt6.QtCore import QEvent, QSize, Qt
 from PyQt6.QtGui import (
     QAction,
     QCloseEvent,
-    QDesktopServices,
     QFont,
     QKeySequence,
     QPixmap,
@@ -95,6 +96,7 @@ from ..core.folder_manager import (
 )
 from ..core.image_loader import ImageLoader, ImageLoaderError, subfolders
 from ..core.sorter import MissingImageError, NoCurrentImageError, Sorter, UndoError
+from ..utils.browser import open_in_browser
 from ..utils.config import (
     THEME_DARK,
     THEME_LIGHT,
@@ -1070,7 +1072,12 @@ class MainWindow(QMainWindow):
             "<p>Sort a folder of photos into Good, Bad, Great and OK subfolders by "
             "swiping or pressing a key. Files are moved, never overwritten and "
             "never deleted.</p>"
+            f"<p><small>Support: {SUPPORT_URL}</small></p>"
         )
+        # The URL is plain, selectable text on purpose: a Qt link would go
+        # through the same desktop service the button cannot rely on, but text
+        # can be copied into a browser by hand.
+        box.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         coffee = QPushButton("Buy me a coffee", box)
         coffee.setObjectName("button_buy_me_a_coffee")
         coffee.setToolTip(f"Opens {SUPPORT_URL} in your browser")
@@ -1085,9 +1092,14 @@ class MainWindow(QMainWindow):
         box.exec()
 
     def _open_support_page(self) -> None:
-        """Open the donation page in the default browser; replaceable in tests."""
+        """Open the donation page, or say where to find it; replaceable in tests."""
         LOGGER.info("opening the support page: %s", SUPPORT_URL)
-        QDesktopServices.openUrl(QUrl(SUPPORT_URL))
+        if open_in_browser(SUPPORT_URL):
+            return
+        LOGGER.warning("no browser accepted %s", SUPPORT_URL)
+        # The About box is modal, so this stays readable in the status bar
+        # behind it and after it closes.
+        self.show_status_message(f"Could not open a browser — the page is {SUPPORT_URL}", 15000)
 
     # ------------------------------------------------------------------
     # Dialogs (replaceable in tests)

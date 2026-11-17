@@ -12,8 +12,9 @@ Coverage
     * the live progress label and the status-bar counters;
     * the shortcut surface: rescan (F5/Ctrl+R), full screen (F11), the F1/`?`
       reference overlay, and that every bound key is documented in it;
-    * the About box: product name, version, and the *Buy me a coffee* button that
-      hands ``SUPPORT_URL`` to the desktop service.
+    * the About box: product name, version, the selectable support URL and the
+      *Buy me a coffee* button that hands ``SUPPORT_URL`` to the browser
+      launchers, plus what happens when no browser answers.
 
 Conventions
     * The window is always built with an explicit ``config_path`` under
@@ -32,7 +33,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from PIL import Image
-from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QLabel, QWidget
 
@@ -829,6 +830,8 @@ def test_about_box_names_the_app_version_and_support_button(
     assert box.windowTitle() == f"About {APP_DISPLAY_NAME}"
     assert APP_DISPLAY_NAME in box.text()
     assert __version__ in box.text()
+    assert SUPPORT_URL in box.text()
+    assert box.textInteractionFlags() & Qt.TextInteractionFlag.TextSelectableByMouse
     assert coffee.text() == "Buy me a coffee"
     assert coffee.objectName() == "button_buy_me_a_coffee"
     assert SUPPORT_URL in coffee.toolTip()
@@ -837,23 +840,42 @@ def test_about_box_names_the_app_version_and_support_button(
 def test_coffee_button_opens_the_support_page(
     window: Callable[..., MainWindow], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Clicking the button hands the donation URL to the desktop service."""
-    opened: list[QUrl] = []
+    """Clicking the button hands the donation URL to the browser launchers."""
+    opened: list[str] = []
 
-    # Stands in for QDesktopServices so the test never launches a browser.
-    class RecordingDesktopServices:
-        @staticmethod
-        def openUrl(url: QUrl) -> bool:
-            opened.append(url)
-            return True
+    def fake_open_in_browser(url: str) -> bool:
+        opened.append(url)
+        return True
 
-    monkeypatch.setattr(main_window_module, "QDesktopServices", RecordingDesktopServices)
+    # Stands in for xdg-open/gio so the test never launches a browser.
+    monkeypatch.setattr(main_window_module, "open_in_browser", fake_open_in_browser)
     created = window()
 
     _box, coffee = created._build_about_box()
     coffee.click()
 
-    assert [url.toString() for url in opened] == [SUPPORT_URL]
+    assert opened == [SUPPORT_URL]
+
+
+def test_coffee_button_reports_a_desktop_without_a_browser(
+    window: Callable[..., MainWindow], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When no launcher takes the URL the status bar names it, so it can be copied."""
+    monkeypatch.setattr(main_window_module, "open_in_browser", lambda _url: False)
+    created = window()
+    messages: list[str] = []
+
+    def record(message: str, _timeout_ms: int = 5000) -> None:
+        messages.append(message)
+
+    monkeypatch.setattr(created, "show_status_message", record)
+
+    _box, coffee = created._build_about_box()
+    coffee.click()
+
+    assert len(messages) == 1
+    assert "Could not open a browser" in messages[0]
+    assert SUPPORT_URL in messages[0]
 
 
 def test_about_action_sits_in_the_help_menu(window: Callable[..., MainWindow]) -> None:

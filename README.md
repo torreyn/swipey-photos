@@ -62,7 +62,7 @@ counts, config persistence). Install it with `pipx install
 git+https://github.com/torreyn/swipey-photos.git`, download the standalone binary
 from the [latest release](https://github.com/torreyn/swipey-photos/releases/latest),
 or work from a checkout with `pip install .`; then run `swipey-photos` or
-`python -m swipey_photos` and sort a folder end to end (400 tests, green on Python
+`python -m swipey_photos` and sort a folder end to end (410 tests, green on Python
 3.11–3.13 in CI, ~94 % statement coverage). `packaging/` adds the `.desktop`
 entry, the generated icon theme and an AppImage build script, and
 `scripts/build.sh` produces the one-file binary — see
@@ -561,8 +561,9 @@ bindings are the reliable fallback.
 
 **How can I support the project?**
 *Help → About* carries a **Buy me a coffee** button that opens
-<https://buymeacoffee.com/2re.me>. Bug reports and a star on the repository help
-just as much.
+<https://buymeacoffee.com/2re.me>; the same address is selectable in the About
+text, so it can be copied if the desktop has no browser to hand. Bug reports and
+a star on the repository help just as much.
 
 ---
 

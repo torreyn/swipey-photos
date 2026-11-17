@@ -39,6 +39,16 @@ artefact. New entries go under `[Unreleased]` and move down when a tag is cut â€
   tag-triggered release workflow; `pip install ".[binary]"` is the only extra
   requirement for building a standalone executable.
 
+### Fixed
+
+- The About box's *Buy me a coffee* button now opens the browser for real. It
+  went through `QDesktopServices.openUrl()`, which on Wayland desktops that
+  route through `xdg-desktop-portal` returns `True` and opens nothing â€” the
+  click looked like a no-op. The new `utils/browser.py` drives `xdg-open`, then
+  `gio open`, then `webbrowser`, checks the exit status of each, and the window
+  names the URL in the status bar when no launcher accepts it. The About text
+  shows the URL as selectable text as well, so it can always be copied.
+
 ## [1.0.0] - 2026-11-17
 
 First packaged release. The sorting loop, the comfort pass and the desktop

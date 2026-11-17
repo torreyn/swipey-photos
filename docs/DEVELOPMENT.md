@@ -97,6 +97,7 @@ tests/
 ├── test_config.py           # defaults, round-trip, validation, recents, XDG overrides
 ├── test_image_loader.py     # scanning, EXIF, corrupt files, preview bounds
 ├── test_logging_setup.py    # rotation, levels, namespace, log directory
+├── test_browser.py          # xdg-open → gio → webbrowser, failures, timeout
 ├── test_sorter.py           # queue cursor, counters, undo, vanished files
 ├── test_swipe_card.py       # fit/aspect, shadow effect, resize refit, drag maths, badge (gui)
 ├── test_swipe_widget.py     # stage: image hand-off, caption, no legend, fade-in (gui)
