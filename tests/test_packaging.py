@@ -3,7 +3,8 @@
 These tests are what keeps the release artefacts honest: the ``.desktop`` entry,
 the icon theme tree, the install and build scripts, the PyInstaller recipe, the
 GitHub workflows, the changelog and the sdist manifest are validated here instead
-of by eyeballing a diff. They mirror the repository layout the way the other
+of by eyeballing a diff, and ``requirements.txt`` is checked against the packaging
+metadata. They mirror the repository layout the way the other
 modules mirror ``src/``.
 
 Conventions
@@ -445,3 +446,27 @@ def test_changelog_follows_keep_a_changelog() -> None:
     assert "Keep a Changelog" in changelog
     assert "## [Unreleased]" in changelog
     assert f"## [{__version__}]" in changelog, "tag the version before releasing it"
+
+
+def _requirement_specifiers(path: Path) -> set[str]:
+    """Return the active specifiers of a requirements file, comments stripped."""
+    specifiers = set()
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        specifier = raw.split("#", 1)[0].strip().replace(" ", "")
+        if specifier:
+            specifiers.add(specifier)
+    return specifiers
+
+
+def test_requirements_txt_mirrors_the_runtime_dependencies() -> None:
+    """``pip install -r requirements.txt`` must resolve the same pins as the wheel.
+
+    ``pyproject.toml`` is the source of truth for packaging; the requirements
+    file is the plain-``pip`` mirror. The two drifted once — ``Pillow<12`` stayed
+    behind after the runtime floor moved to 13 — and this assertion is the
+    offline guard against that happening again.
+    """
+    metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    declared = {specifier.replace(" ", "") for specifier in metadata["project"]["dependencies"]}
+
+    assert _requirement_specifiers(ROOT / "requirements.txt") == declared

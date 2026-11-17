@@ -51,7 +51,9 @@ convention and why personal photos must stay out of the repository.
 ## Project status
 
 `v1.0.0` is the **first packaged release**: the core loop, the comfort pass and
-the desktop integration all ship together. The Qt-free business layer is
+the desktop integration all ship together. `v1.0.1` is a security patch that
+moves Pillow to 13 (decoder advisories) and pytest to 9.0.3; nothing in the UI
+changed. The Qt-free business layer is
 implemented and tested — image loading with EXIF handling, the four-way sorter
 with undo, the folder manager, collision-safe file operations, JSON
 configuration and rotating logs. The Qt side is wired up too: the swipe card
@@ -62,7 +64,7 @@ counts, config persistence). Install it with `pipx install
 git+https://github.com/torreyn/swipey-photos.git`, download the standalone binary
 from the [latest release](https://github.com/torreyn/swipey-photos/releases/latest),
 or work from a checkout with `pip install .`; then run `swipey-photos` or
-`python -m swipey_photos` and sort a folder end to end (411 tests, green on Python
+`python -m swipey_photos` and sort a folder end to end (413 tests, green on Python
 3.11–3.13 in CI, ~94 % statement coverage). `packaging/` adds the `.desktop`
 entry, the generated icon theme and the AppImage build that the releases use, and
 `scripts/build.sh` produces the one-file binary — see
@@ -131,7 +133,7 @@ Everything below ships in v1.0 unless marked otherwise:
 | Linux | X11 or Wayland (tested on Debian/Ubuntu, Fedora, Arch) |
 | Python | **3.11+** (uses `ExceptionGroup`, modern typing, `slots` dataclasses) |
 | Qt | Qt 6.6+ via **PyQt6** (installed from PyPI, not from `apt`) |
-| Pillow | 10+ — image validation, EXIF orientation, thumbnails |
+| Pillow | 13+ — image validation, EXIF orientation, thumbnails |
 | RAM | ~300 MB comfortable for a 5 000-image folder |
 
 ### PyQt6 vs. PySide6
@@ -192,7 +194,7 @@ Swipey Photos is not on PyPI yet. Pick one of three routes.
 
 ```bash
 pipx install git+https://github.com/torreyn/swipey-photos.git
-swipey-photos --version  # Swipey Photos 1.0.0
+swipey-photos --version  # Swipey Photos 1.0.1
 ```
 
 Updating means re-running the same command with `--force`:
@@ -227,9 +229,9 @@ Download `swipey-photos-<version>-linux-x86_64` from the
 [latest release](https://github.com/torreyn/swipey-photos/releases/latest):
 
 ```bash
-chmod +x swipey-photos-1.0.0-linux-x86_64
-./swipey-photos-1.0.0-linux-x86_64 --version
-./swipey-photos-1.0.0-linux-x86_64 ~/Pictures/unsorted
+chmod +x swipey-photos-1.0.1-linux-x86_64
+./swipey-photos-1.0.1-linux-x86_64 --version
+./swipey-photos-1.0.1-linux-x86_64 ~/Pictures/unsorted
 ```
 
 The file carries CPython, PyQt6 and Pillow in one executable, but not glibc and
@@ -253,9 +255,9 @@ and no wheel to install. The X11/EGL client libraries from step 1 are still
 needed — any desktop that already runs Qt applications has them.
 
 ```bash
-chmod +x swipey-photos-v1.0.0-linux-x86_64.AppImage
-./swipey-photos-v1.0.0-linux-x86_64.AppImage --version
-./swipey-photos-v1.0.0-linux-x86_64.AppImage ~/Pictures/unsorted
+chmod +x swipey-photos-v1.0.1-linux-x86_64.AppImage
+./swipey-photos-v1.0.1-linux-x86_64.AppImage --version
+./swipey-photos-v1.0.1-linux-x86_64.AppImage ~/Pictures/unsorted
 ```
 
 To build one yourself — the recipe is the one the release workflow runs:
@@ -263,7 +265,7 @@ To build one yourself — the recipe is the one the release workflow runs:
 ```bash
 uv python install 3.13                                   # relocatable CPython
 APPIMAGETOOL=/path/to/appimagetool ./packaging/appimage/build-appimage.sh
-# -> build/appimage/swipey-photos-1.0.0-x86_64.AppImage
+# -> build/appimage/swipey-photos-1.0.1-x86_64.AppImage
 ```
 
 [`docs/PACKAGING.md` §4](docs/PACKAGING.md#4-appimage) covers the options,
@@ -273,7 +275,7 @@ including `--staging-only` for packaging the AppDir by hand.
 
 ```bash
 python -c "import swipey_photos; print(swipey_photos.__version__)"
-swipey-photos --version      # prints "Swipey Photos 1.0.0"
+swipey-photos --version      # prints "Swipey Photos 1.0.1"
 ```
 
 ### 4. Add it to your application menu

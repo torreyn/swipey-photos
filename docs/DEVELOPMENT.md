@@ -9,8 +9,8 @@ strategy, debugging Qt on Linux, and the release checklist.
 | --- | --- | --- |
 | Python | 3.11+ (3.12 recommended) | runtime, typing, `slots` dataclasses |
 | PyQt6 | 6.6+ | Qt 6 bindings |
-| Pillow | 10+ | image validation, EXIF, previews |
-| pytest + pytest-qt + pytest-cov | 8.2+ / 4.4+ / 5.0+ | unit tests, GUI tests, coverage |
+| Pillow | 13+ | image validation, EXIF, previews |
+| pytest + pytest-qt + pytest-cov | 9.0.3+ / 4.4+ / 5.0+ | unit tests, GUI tests, coverage |
 | ruff | latest | lint, import sorting and formatting (`ruff check` + `ruff format`) |
 | mypy | 1.10+ | strict typing for `src/` |
 | build | 1.2+ | sdist/wheel verification |
@@ -190,7 +190,7 @@ directory, permission denied, and source == destination.
 
 ```bash
 python -m build                 # sdist + wheel into dist/
-python -m zipfile -l dist/swipey_photos-1.0.0-py3-none-any.whl
+python -m zipfile -l dist/swipey_photos-1.0.1-py3-none-any.whl
 
 # Verify a clean install in a throwaway venv
 python3 -m venv /tmp/is-verify

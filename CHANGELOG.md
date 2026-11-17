@@ -13,6 +13,31 @@ artefact. New entries go under `[Unreleased]` and move down when a tag is cut �
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-17
+
+Security patch. The runtime clamp on Pillow still admitted every advisory fixed
+after 10.0, and the `dev` extra allowed a pytest with a known `tmpdir` bug; both
+floors now sit on a release that no open advisory covers.
+
+### Security
+
+- **Pillow 13** — `Pillow>=10.0,<12` allowed 11.x, which carries out-of-bounds
+  writes in the PSD, TIFF and BCn decoders, an integer overflow in font parsing
+  and an argument injection in the Ghostscript EPS path (`GHSA-cfh3-3jmp-rvhc`,
+  `GHSA-pwv6-vv43-88gr`, `GHSA-wjx4-4jcj-g98j`, `GHSA-w889-685w-c8fh`, …). The
+  runtime pin is now `Pillow>=13.0.0,<14`, the first line the advisory database
+  leaves clean; Pillow 13 needs Python 3.11, which is already the
+  `requires-python` floor, so no supported interpreter is dropped.
+- **pytest 9.0.3** — the `dev` extra allowed `pytest>=8.2`, which includes
+  `GHSA-6w46-j5rx-g56g` (unsafe `tmpdir` handling, fixed in 9.0.3). The floor
+  moved to 9.0.3 and `[tool.pytest.ini_options] minversion` follows at `9.0`.
+
+### Added
+
+- **Dependency-mirror test** — `tests/test_packaging.py` now fails when
+  `requirements.txt` and `[project].dependencies` disagree, which is how the
+  stale `Pillow<12` cap survived the 1.0.0 release.
+
 ### Changed
 
 - **CI on Node 24** — the workflows use `actions/checkout@v7`,

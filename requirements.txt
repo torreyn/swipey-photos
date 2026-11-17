@@ -15,5 +15,7 @@
 # Qt 6 bindings used by the UI layer
 PyQt6>=6.6,<7
 
-# Image validation, EXIF orientation handling and thumbnail decoding
-Pillow>=10.0,<12
+# Image validation, EXIF orientation handling and thumbnail decoding.
+# 13.0.0 is the first release line with no open advisory; the old `<12` cap
+# allowed the 11.x decoder bugs. Keep this line identical to pyproject.toml.
+Pillow>=13.0.0,<14
