@@ -74,7 +74,7 @@ Threading and lifetime
 
 Standalone demo (no session, no files, no other module)::
 
-    python -m image_swiper.ui.swipe_card
+    python -m swipey_photos.ui.swipe_card
 """
 
 from __future__ import annotations
@@ -406,7 +406,7 @@ class SwipeCard(QWidget):
         """Freeze the resting position at the card's current position.
 
         A deck-level entrance animation (see
-        :class:`~image_swiper.ui.animator.CardAnimator`) moves the card without
+        :class:`~swipey_photos.ui.animator.CardAnimator`) moves the card without
         dragging it. Without this lock, :meth:`moveEvent` would mistake the
         animated position for the new home and the card would settle off-centre.
         While the lock is held, moves never update :attr:`home_position`.

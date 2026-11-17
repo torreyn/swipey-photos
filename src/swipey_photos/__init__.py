@@ -1,4 +1,4 @@
-"""ImageSwiper — sort a folder of images with Tinder-style swipe gestures.
+"""Swipey Photos — sort a folder of images with Tinder-style swipe gestures.
 
 A small Linux desktop application built with PyQt6. The user opens a folder,
 sees one image at a time, and swipes it in one of four directions; the file is

@@ -21,7 +21,7 @@ Behaviour
     * ``folder_selected`` carries ``str(Path)`` so the signal needs no Qt type
       registration and tests can compare it directly with ``str(tmp_path)``.
     * The recent list is newest-first, de-duplicated and capped at
-      :data:`image_swiper.utils.config.MAX_RECENT_FOLDERS`; entries are elided
+      :data:`swipey_photos.utils.config.MAX_RECENT_FOLDERS`; entries are elided
       in the middle so long paths stay readable and the full path is a tooltip.
     * Cancelling the dialog emits nothing, so the window can stay where it is.
     * The primary button is the default button: Enter opens the picker, which is

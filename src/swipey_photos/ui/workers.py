@@ -21,7 +21,7 @@ Public API
 
 Threading contract
     * Workers receive only plain data (``Path``, ints) plus a reference to the
-      thread-safe :class:`~image_swiper.core.image_loader.ImageLoader`; they
+      thread-safe :class:`~swipey_photos.core.image_loader.ImageLoader`; they
       never touch a widget.
     * Results travel as signals, which Qt queues onto the GUI thread. The worker
       converts pixels to ``QImage`` (thread-safe); ``QPixmap`` conversion
@@ -235,7 +235,7 @@ class PreviewPrefetcher(QObject):
 
         Returns:
             ``(image, original_size)`` exactly as
-            :meth:`~image_swiper.core.image_loader.ImageLoader.load_preview`
+            :meth:`~swipey_photos.core.image_loader.ImageLoader.load_preview`
             would, or ``None`` when the preview is not ready yet.
         """
         key = str(Path(path))

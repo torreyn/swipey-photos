@@ -32,13 +32,13 @@ Contains
     branding.py         Generated window icon and welcome logo (no asset files).
 
 Boundary rules
-    * This package (together with :mod:`image_swiper.app`) is the only place
+    * This package (together with :mod:`swipey_photos.app`) is the only place
       allowed to import ``PyQt6``. ``core`` and ``utils`` stay Qt-free so they
       can be unit tested headlessly and reused by a future CLI.
     * Widgets never touch the filesystem; they emit signals and let the main
       window delegate to the core layer.
     * Core data objects are converted to Qt types (``QPixmap``/``QImage``) at
-      this boundary, on the GUI thread, through :mod:`image_swiper.ui.image_utils`.
+      this boundary, on the GUI thread, through :mod:`swipey_photos.ui.image_utils`.
 
 See ``docs/ARCHITECTURE.md`` for the state machines and signal contract.
 """

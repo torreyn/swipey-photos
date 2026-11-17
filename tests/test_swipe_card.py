@@ -33,8 +33,8 @@ from PyQt6.QtCore import QEvent, QPoint, QPointF, Qt
 from PyQt6.QtGui import QColor, QMouseEvent, QPixmap
 from PyQt6.QtWidgets import QApplication, QGraphicsDropShadowEffect
 
-from image_swiper.ui import swipe_card
-from image_swiper.ui.swipe_card import (
+from swipey_photos.ui import swipe_card
+from swipey_photos.ui.swipe_card import (
     DEFAULT_MARGIN,
     DEFAULT_SHADOW_ALPHA,
     DEFAULT_SHADOW_BLUR,
@@ -560,7 +560,7 @@ def test_card_depends_on_nothing_but_qt() -> None:
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module)
     forbidden = [
-        name for name in imported if name.startswith(("image_swiper.core", "image_swiper.utils"))
+        name for name in imported if name.startswith(("swipey_photos.core", "swipey_photos.utils"))
     ]
     assert not forbidden, f"the swipe card must not import {forbidden}"
     assert "PyQt6.QtWidgets" in imported

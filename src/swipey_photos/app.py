@@ -4,7 +4,7 @@ Responsibility
     Own the process-level lifecycle: create the ``QApplication``, apply the
     application name/version/icon and the high-DPI policy, load the
     configuration, install the Qt-to-logging bridge, build
-    :class:`image_swiper.ui.main_window.MainWindow`, show it and run the event
+    :class:`swipey_photos.ui.main_window.MainWindow`, show it and run the event
     loop. This module is the *composition root*: it is the only place where the
     process-wide objects are created, which keeps widgets testable with fakes
     and ``core``/``utils`` free of Qt.
@@ -13,7 +13,7 @@ Public API
     ORGANIZATION_NAME, ORGANIZATION_DOMAIN   identity reported by ``QApplication``
     run(argv=None, *, config=None, config_path=None, folder=None) -> int
         Configure the process, show the main window, return the Qt exit code.
-        Called by :func:`image_swiper.__main__.main`.
+        Called by :func:`swipey_photos.__main__.main`.
     build_main_window(app, config=None, *, config_path=None) -> MainWindow
         Construct the window without entering the event loop, for tests.
 
@@ -23,7 +23,7 @@ Rules
     * No filesystem scanning, decoding or file moves happen in this module.
     * Importing this module must not create widgets and must not read
       ``sys.argv``: Qt is imported lazily inside the functions, so
-      ``python -m image_swiper --version`` works even where Qt cannot start.
+      ``python -m swipey_photos --version`` works even where Qt cannot start.
 """
 
 from __future__ import annotations
@@ -45,13 +45,13 @@ if TYPE_CHECKING:
 
 LOGGER = get_logger(__name__)
 
-ORGANIZATION_NAME = "ImageSwiper"
+ORGANIZATION_NAME = "Swipey Photos"
 """Value of ``QApplication.organizationName``; also used by Qt for app data."""
 
 ORGANIZATION_DOMAIN = "github.com"
 """Value of ``QApplication.organizationDomain``."""
 
-DESKTOP_FILE_NAME = "image-swiper"
+DESKTOP_FILE_NAME = "swipey-photos"
 """Wayland/X11 application id Qt reports to the desktop environment."""
 
 _QT_HANDLER_INSTALLED = False
@@ -77,7 +77,7 @@ def _configure_application(app: QApplication) -> None:
     """Apply the application name, version, identity and window icon."""
     from .ui.branding import APP_DISPLAY_NAME, app_icon
 
-    app.setApplicationName("image-swiper")
+    app.setApplicationName("swipey-photos")
     app.setApplicationDisplayName(APP_DISPLAY_NAME)
     app.setApplicationVersion(__version__)
     app.setOrganizationName(ORGANIZATION_NAME)
@@ -87,7 +87,7 @@ def _configure_application(app: QApplication) -> None:
 
 
 def _install_qt_message_handler() -> None:
-    """Route Qt's own diagnostic messages into the ``image_swiper`` log.
+    """Route Qt's own diagnostic messages into the ``swipey_photos`` log.
 
     Qt reports platform-plugin and font problems through its own handler, which
     writes to stderr and is lost in a desktop launch. Forwarding them keeps a
@@ -134,7 +134,7 @@ def build_main_window(
         dry_run: Rehearse the session instead of moving files, for ``--dry-run``.
 
     Returns:
-        A :class:`~image_swiper.ui.main_window.MainWindow` that is not shown yet.
+        A :class:`~swipey_photos.ui.main_window.MainWindow` that is not shown yet.
 
     Raises:
         ConfigError: The configuration file exists but cannot be used.
@@ -200,7 +200,7 @@ def run(
     except Exception:
         LOGGER.exception("could not create the main window")
         print(
-            "ImageSwiper could not start. See the log for details; on a minimal "
+            "Swipey Photos could not start. See the log for details; on a minimal "
             "system make sure the Qt platform plugin's system libraries "
             "(for example libxcb-cursor0) are installed.",
             file=sys.stderr,

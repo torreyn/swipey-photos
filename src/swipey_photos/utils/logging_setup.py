@@ -10,11 +10,11 @@ Responsibility
 Public API
     LOGGER_NAME, LOG_FILENAME, LOG_FORMAT, MAX_BYTES, BACKUP_COUNT
     LoggingSetupError               the log directory or file is unusable
-    logs_dir()                      $XDG_DATA_HOME/image-swiper/logs
+    logs_dir()                      $XDG_DATA_HOME/swipey-photos/logs
     setup_logging(level, log_dir, console, force) -> Path
         Idempotent; returns the log file path. ``RotatingFileHandler`` with
         ``maxBytes=2 MiB`` and ``backupCount=3``.
-    get_logger(name)                logger inside the ``image_swiper`` tree
+    get_logger(name)                logger inside the ``swipey_photos`` tree
 
 Conventions
     * ``LOGGER = get_logger(__name__)`` at module import time.
@@ -33,9 +33,9 @@ import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-LOGGER_NAME = "image_swiper"
-APP_DIR_NAME = "image-swiper"
-LOG_FILENAME = "image-swiper.log"
+LOGGER_NAME = "swipey_photos"
+APP_DIR_NAME = "swipey-photos"
+LOG_FILENAME = "swipey-photos.log"
 LOG_FORMAT = "%(asctime)s %(levelname)-8s %(name)s: %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 MAX_BYTES = 2 * 1024 * 1024
@@ -48,14 +48,14 @@ class LoggingSetupError(Exception):
 
 
 def logs_dir() -> Path:
-    """Return the log directory, ``$XDG_DATA_HOME/image-swiper/logs``."""
+    """Return the log directory, ``$XDG_DATA_HOME/swipey-photos/logs``."""
     root = os.environ.get("XDG_DATA_HOME")
     base = Path(root).expanduser() if root else Path.home() / ".local" / "share"
     return base / APP_DIR_NAME / "logs"
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Return a logger inside the single ``image_swiper`` namespace."""
+    """Return a logger inside the single ``swipey_photos`` namespace."""
     if name == LOGGER_NAME or name.startswith(f"{LOGGER_NAME}."):
         return logging.getLogger(name)
     return logging.getLogger(f"{LOGGER_NAME}.{name}")

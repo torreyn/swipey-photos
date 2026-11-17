@@ -18,9 +18,9 @@ import pytest
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel
 
-from image_swiper.core.folder_manager import CATEGORIES
-from image_swiper.ui.completion_screen import CompletionScreen
-from image_swiper.ui.swipe_card import CATEGORY_COLORS
+from swipey_photos.core.folder_manager import CATEGORIES
+from swipey_photos.ui.completion_screen import CompletionScreen
+from swipey_photos.ui.swipe_card import CATEGORY_COLORS
 
 if TYPE_CHECKING:
     from pytestqt.qtbot import QtBot

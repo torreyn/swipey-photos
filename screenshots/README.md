@@ -34,7 +34,7 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import QApplication
 
-from image_swiper.ui.main_window import MainWindow
+from swipey_photos.ui.main_window import MainWindow
 
 folder = Path(os.environ["FOLDER"]).expanduser()
 out = Path(os.environ.get("OUT", "screenshots/main-window.png"))
@@ -90,7 +90,7 @@ Notes:
 After adding a file, link it from the *Screenshots* section of `README.md`:
 
 ```markdown
-![ImageSwiper main window](screenshots/main-window.png)
+![Swipey Photos main window](screenshots/main-window.png)
 ```
 
 Keep the alt text descriptive — it is what a screen reader announces and what

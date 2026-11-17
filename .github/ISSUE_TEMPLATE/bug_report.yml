@@ -15,9 +15,9 @@ body:
   - type: input
     id: version
     attributes:
-      label: ImageSwiper version
-      description: Output of `image-swiper --version` (or the release asset name).
-      placeholder: ImageSwiper 1.0.0
+      label: Swipey Photos version
+      description: Output of `swipey-photos --version` (or the release asset name).
+      placeholder: Swipey Photos 1.0.0
     validations:
       required: true
 
@@ -47,7 +47,7 @@ body:
       label: Steps to reproduce
       description: Numbered steps, starting from launching the app.
       placeholder: |
-        1. `image-swiper ~/Pictures/to-sort`
+        1. `swipey-photos ~/Pictures/to-sort`
         2. Swipe right on the third image
         3. ...
     validations:
@@ -73,8 +73,8 @@ body:
     attributes:
       label: Log output
       description: |
-        The tail of `~/.local/share/image-swiper/logs/image-swiper.log`, or the
-        terminal output of `image-swiper -v`. Redact paths you consider private.
+        The tail of `~/.local/share/swipey-photos/logs/swipey-photos.log`, or the
+        terminal output of `swipey-photos -v`. Redact paths you consider private.
       render: text
     validations:
       required: false

@@ -20,7 +20,7 @@ import pytest
 from PyQt6.QtGui import QPalette
 from PyQt6.QtWidgets import QApplication
 
-from image_swiper.ui.theme import (
+from swipey_photos.ui.theme import (
     DARK_TEXT,
     DARK_WINDOW,
     apply_theme,
@@ -28,7 +28,7 @@ from image_swiper.ui.theme import (
     build_light_palette,
     system_theme,
 )
-from image_swiper.utils.config import THEME_DARK, THEME_LIGHT, THEME_SYSTEM
+from swipey_photos.utils.config import THEME_DARK, THEME_LIGHT, THEME_SYSTEM
 
 pytestmark = pytest.mark.gui
 

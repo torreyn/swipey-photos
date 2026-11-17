@@ -13,7 +13,7 @@ Public API
     ConfigValidationError           a value is out of range or unknown
     WindowConfig(width, height)     remembered window size
     Config(version, last_folder, recent_folders, window, theme)
-    config_dir() / config_path()    $XDG_CONFIG_HOME/image-swiper/config.json
+    config_dir() / config_path()    $XDG_CONFIG_HOME/swipey-photos/config.json
     default_config()                defaults used when no file exists yet
     load_config(path=None) -> Config
     save_config(config, path=None) -> Path
@@ -50,7 +50,7 @@ from .logging_setup import get_logger
 LOGGER = get_logger(__name__)
 
 CONFIG_VERSION = 1
-APP_DIR_NAME = "image-swiper"
+APP_DIR_NAME = "swipey-photos"
 CONFIG_FILE_NAME = "config.json"
 DIRECTORY_MODE = 0o700
 FILE_MODE = 0o600
@@ -101,7 +101,7 @@ class Config:
 
 
 def config_dir() -> Path:
-    """Return ``$XDG_CONFIG_HOME/image-swiper`` (``~/.config/...`` by default)."""
+    """Return ``$XDG_CONFIG_HOME/swipey-photos`` (``~/.config/...`` by default)."""
     root = os.environ.get("XDG_CONFIG_HOME")
     base = Path(root).expanduser() if root else Path.home() / ".config"
     return base / APP_DIR_NAME

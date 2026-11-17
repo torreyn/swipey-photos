@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from image_swiper.utils.config import (
+from swipey_photos.utils.config import (
     CONFIG_VERSION,
     MAX_RECENT_FOLDERS,
     Config,
@@ -28,7 +28,7 @@ from image_swiper.utils.config import (
     with_recent_folder,
 )
 
-LOGGER_NAME = "image_swiper"
+LOGGER_NAME = "swipey_photos"
 POSIX_ONLY = pytest.mark.skipif(os.name != "posix", reason="POSIX permission bits")
 
 
@@ -52,7 +52,7 @@ def test_default_config_uses_the_documented_values() -> None:
 
 def test_config_dir_follows_xdg(xdg_dirs: dict[str, Path]) -> None:
     """``XDG_CONFIG_HOME`` decides where the file lives."""
-    assert config_dir() == xdg_dirs["XDG_CONFIG_HOME"] / "image-swiper"
+    assert config_dir() == xdg_dirs["XDG_CONFIG_HOME"] / "swipey-photos"
     assert config_path() == config_dir() / "config.json"
 
 
@@ -60,7 +60,7 @@ def test_config_dir_falls_back_to_dot_config(monkeypatch: pytest.MonkeyPatch) ->
     """Without the variable the documented path ``~/.config`` is used."""
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
 
-    assert config_dir() == Path.home() / ".config" / "image-swiper"
+    assert config_dir() == Path.home() / ".config" / "swipey-photos"
 
 
 def test_missing_file_returns_defaults(xdg_dirs: dict[str, Path]) -> None:

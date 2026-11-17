@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
-PACKAGE_ROOT = SRC_ROOT / "image_swiper"
+PACKAGE_ROOT = SRC_ROOT / "swipey_photos"
 QT_BINDINGS = {"PyQt6", "PySide6"}
 QT_FREE_LAYERS = ("core", "utils")
 
@@ -76,7 +76,7 @@ def _imported_modules(path: Path) -> set[str]:
 
     Relative imports are resolved against the importing file's package so that
     ``from ..ui import main_window`` in ``core/sorter.py`` becomes
-    ``image_swiper.ui`` and can be checked like any absolute import.
+    ``swipey_photos.ui`` and can be checked like any absolute import.
     """
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     module_name = _module_name(path)
@@ -112,7 +112,7 @@ def test_layer_does_not_import_qt(layer: str) -> None:
         for module in _imported_modules(path)
         if module.split(".")[0] in QT_BINDINGS
     ]
-    assert not violations, "Qt import(s) outside image_swiper/ui:\n" + "\n".join(violations)
+    assert not violations, "Qt import(s) outside swipey_photos/ui:\n" + "\n".join(violations)
 
 
 def test_core_does_not_import_ui() -> None:
@@ -121,14 +121,14 @@ def test_core_does_not_import_ui() -> None:
         f"{path.relative_to(PACKAGE_ROOT)} imports {module}"
         for path in _layer_files("core")
         for module in _imported_modules(path)
-        if module == "image_swiper.ui" or module.startswith("image_swiper.ui.")
+        if module == "swipey_photos.ui" or module.startswith("swipey_photos.ui.")
     ]
     assert not violations, "\n".join(violations)
 
 
 def test_utils_does_not_import_core_or_ui() -> None:
     """``utils`` is the bottom of the stack and must stay dependency-free."""
-    forbidden = ("image_swiper.core", "image_swiper.ui")
+    forbidden = ("swipey_photos.core", "swipey_photos.ui")
     violations = [
         f"{path.relative_to(PACKAGE_ROOT)} imports {module}"
         for path in _layer_files("utils")

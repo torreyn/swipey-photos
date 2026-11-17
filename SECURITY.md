@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-ImageSwiper is a desktop tool that moves files inside folders you choose, so
+Swipey Photos is a desktop tool that moves files inside folders you choose, so
 the interesting failure modes are filesystem ones rather than remote ones.
 
 | Version | Supported |
@@ -14,11 +14,11 @@ the interesting failure modes are filesystem ones rather than remote ones.
 
 **Do not open a public issue.** Use GitHub's private reporting: *Security* tab →
 *Report a vulnerability*
-(<https://github.com/torreyn/image-swiper/security/advisories/new>).
+(<https://github.com/torreyn/swipey-photos/security/advisories/new>).
 
 Please include:
 
-- the version (`image-swiper --version`),
+- the version (`swipey-photos --version`),
 - what an attacker could achieve (overwrite a file outside the chosen folder,
   follow a symlink out of the library, execute something via a crafted image
   name, …),
@@ -57,5 +57,5 @@ These are tested, so a regression is a security bug:
 - Nothing is ever deleted; rejected images are moved to a folder.
 - The config file is replaced atomically with mode `0600`
   (`utils/config.py`).
-- Logs redact nothing but stay inside `${XDG_DATA_HOME}/image-swiper/logs/`, so
+- Logs redact nothing but stay inside `${XDG_DATA_HOME}/swipey-photos/logs/`, so
   check them before pasting one into an issue.

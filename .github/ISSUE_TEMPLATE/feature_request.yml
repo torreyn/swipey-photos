@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        ImageSwiper is deliberately small: one gesture per photo, four buckets,
+        Swipey Photos is deliberately small: one gesture per photo, four buckets,
         no database. Ideas that fit that shape land much faster than ideas that
         add a second workflow — say which one this is.
 

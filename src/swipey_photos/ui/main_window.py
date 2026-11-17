@@ -16,7 +16,9 @@ Composition
       so the footer carries the key map that used to sit under the card.
     * Menus: *File* → Open Folder (Ctrl+O), Rescan Folder (F5, Ctrl+R), Undo
       Last (Ctrl+Z), Quit (Ctrl+Q); *View* → Dark Mode, Full Screen (F11);
-      *Help* → Keyboard Shortcuts (F1, ?) and About. The status bar shows the
+      *Help* → Keyboard Shortcuts (F1, ?) and About; the About box carries the
+      version, the tagline and a *Buy me a coffee* button that opens
+      :data:`ui.branding.SUPPORT_URL`. The status bar shows the
       source folder on the left and a live per-category summary, with a coloured
       dot per category, plus the remaining images on the right.
     * Window-level ``QAction`` shortcuts for the four categories (arrows and
@@ -41,12 +43,12 @@ Error handling
 
 Boundary rules
     * The window owns core objects but performs no file I/O itself: scanning,
-      decoding and moving all go through :mod:`image_swiper.core`.
+      decoding and moving all go through :mod:`swipey_photos.core`.
     * The current preview is shown from the background prefetch cache when it is
-      ready (:mod:`image_swiper.ui.workers`); a cache miss falls back to a
+      ready (:mod:`swipey_photos.ui.workers`); a cache miss falls back to a
       synchronous decode, so behaviour never depends on thread timing.
     * Window size, the last folder, the recent folders and the theme are
-      persisted through :mod:`image_swiper.utils.config` when a folder is opened
+      persisted through :mod:`swipey_photos.utils.config` when a folder is opened
       and on close.
     * ``dry_run=True`` (``--dry-run``) uses the same wiring but builds sorters
       that only log their moves, so the whole flow can be rehearsed safely.
@@ -59,8 +61,15 @@ from dataclasses import replace
 from functools import partial
 from pathlib import Path
 
-from PyQt6.QtCore import QEvent, QSize, Qt
-from PyQt6.QtGui import QAction, QCloseEvent, QFont, QKeySequence, QPixmap
+from PyQt6.QtCore import QEvent, QSize, Qt, QUrl
+from PyQt6.QtGui import (
+    QAction,
+    QCloseEvent,
+    QDesktopServices,
+    QFont,
+    QKeySequence,
+    QPixmap,
+)
 from PyQt6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -98,7 +107,7 @@ from ..utils.config import (
 )
 from ..utils.file_ops import FileOperationError
 from ..utils.logging_setup import get_logger
-from .branding import APP_DISPLAY_NAME, TAGLINE
+from .branding import APP_DISPLAY_NAME, SUPPORT_URL, TAGLINE, app_icon
 from .completion_screen import CompletionScreen
 from .image_utils import pixmap_from_pil, qimage_from_pil
 from .shortcut_overlay import ShortcutOverlay
@@ -400,7 +409,7 @@ class MainWindow(QMainWindow):
         self._quit_action = QAction("&Quit", self)
         self._quit_action.setObjectName("action_quit")
         self._quit_action.setShortcuts(list(QUIT_SHORTCUTS))
-        self._quit_action.setStatusTip("Close ImageSwiper (window state is saved)")
+        self._quit_action.setStatusTip("Close Swipey Photos (window state is saved)")
         self._quit_action.triggered.connect(self.close)
         file_menu.addAction(self._quit_action)
 
@@ -1041,17 +1050,44 @@ class MainWindow(QMainWindow):
             LOGGER.warning("could not save configuration: %s", exc)
             self.show_status_message(f"Could not save settings: {exc}", 8000)
 
-    def _show_about(self) -> None:
-        """Show the About box with the version and a one-line description."""
-        QMessageBox.about(
-            self,
-            f"About {APP_DISPLAY_NAME}",
+    def _build_about_box(self) -> tuple[QMessageBox, QPushButton]:
+        """Build the About box without showing it.
+
+        Kept separate from :meth:`_show_about` so tests can inspect the text and
+        the support button without going through a modal ``exec()`` loop.
+
+        Returns:
+            The dialog and its *Buy me a coffee* button, in that order.
+        """
+        box = QMessageBox(self)
+        box.setObjectName("about_box")
+        box.setWindowTitle(f"About {APP_DISPLAY_NAME}")
+        box.setIconPixmap(app_icon().pixmap(64, 64))
+        box.setTextFormat(Qt.TextFormat.RichText)
+        box.setText(
             f"<h3>{APP_DISPLAY_NAME} {__version__}</h3>"
             f"<p>{TAGLINE}</p>"
             "<p>Sort a folder of photos into Good, Bad, Great and OK subfolders by "
             "swiping or pressing a key. Files are moved, never overwritten and "
-            "never deleted.</p>",
+            "never deleted.</p>"
         )
+        coffee = QPushButton("Buy me a coffee", box)
+        coffee.setObjectName("button_buy_me_a_coffee")
+        coffee.setToolTip(f"Opens {SUPPORT_URL} in your browser")
+        coffee.clicked.connect(self._open_support_page)
+        box.addButton(coffee, QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Close)
+        return box, coffee
+
+    def _show_about(self) -> None:
+        """Show the About box with the version, description and support button."""
+        box, _coffee = self._build_about_box()
+        box.exec()
+
+    def _open_support_page(self) -> None:
+        """Open the donation page in the default browser; replaceable in tests."""
+        LOGGER.info("opening the support page: %s", SUPPORT_URL)
+        QDesktopServices.openUrl(QUrl(SUPPORT_URL))
 
     # ------------------------------------------------------------------
     # Dialogs (replaceable in tests)

@@ -23,8 +23,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from image_swiper.core.image_loader import ImageLoader
-from image_swiper.ui.workers import (
+from swipey_photos.core.image_loader import ImageLoader
+from swipey_photos.ui.workers import (
     DEFAULT_LOOKAHEAD,
     PreviewPrefetcher,
     PreviewSignals,

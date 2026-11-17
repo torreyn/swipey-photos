@@ -18,7 +18,7 @@
 - [ ] Branch is based on `main` and the PR is focused on one change
 - [ ] `ruff check .` passes
 - [ ] `ruff format --check .` passes (no `black` — it disagrees with `ruff format`)
-- [ ] `mypy` passes (strict, `src/image_swiper`)
+- [ ] `mypy` passes (strict, `src/swipey_photos`)
 - [ ] `pytest -q` passes, and new core logic has tests (`tmp_path`, `make_images`)
 - [ ] GUI changes are covered by a `@pytest.mark.gui` test and a screenshot
 - [ ] Layer boundaries hold: no PyQt6 import in `core/` or `utils/`

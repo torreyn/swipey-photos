@@ -1,16 +1,16 @@
 #!/bin/sh
-# Build the single-file ImageSwiper executable with PyInstaller.
+# Build the single-file Swipey Photos executable with PyInstaller.
 #
-#   ./scripts/build.sh                      # -> dist/image-swiper
+#   ./scripts/build.sh                      # -> dist/swipey-photos
 #   ./scripts/build.sh --clean              # drop build/venv, rebuild from scratch
 #   PYTHON=python3.12 ./scripts/build.sh    # pick the interpreter for the venv
 #
 # What it does
 #   1. Creates build/venv (or reuses it) and installs the project plus the
 #      `binary` extra from pyproject.toml — no global site-packages are touched.
-#   2. Runs PyInstaller with image-swiper.spec (one file, windowed, named
-#      `image-swiper`).
-#   3. Smoke-tests the result: `dist/image-swiper --version` must print the
+#   2. Runs PyInstaller with swipey-photos.spec (one file, windowed, named
+#      `swipey-photos`).
+#   3. Smoke-tests the result: `dist/swipey-photos --version` must print the
 #      version that pyproject.toml declares.
 #
 # The artifact bundles CPython, PyQt6 and Pillow, so it runs on a machine
@@ -35,7 +35,7 @@ usage() {
     cat <<'EOF'
 Usage: build.sh [options]
 
-Build dist/image-swiper with PyInstaller.
+Build dist/swipey-photos with PyInstaller.
 
 Options:
   --python PATH   interpreter used to create the build venv (default: $PYTHON,
@@ -108,20 +108,20 @@ printf 'build.sh: installing the project and PyInstaller\n'
 mkdir -p "$OUTPUT"
 printf 'build.sh: running PyInstaller\n'
 # --distpath/--workpath/--clean/--noconfirm are honoured with a spec file; the
-# build options themselves live in image-swiper.spec.
+# build options themselves live in swipey-photos.spec.
 "$VENV/bin/python" -m PyInstaller \
     --clean \
     --noconfirm \
     --workpath "$ROOT/build/pyinstaller" \
     --distpath "$OUTPUT" \
-    "$ROOT/image-swiper.spec" || fail "PyInstaller failed"
+    "$ROOT/swipey-photos.spec" || fail "PyInstaller failed"
 
-BINARY=$OUTPUT/image-swiper
+BINARY=$OUTPUT/swipey-photos
 [ -x "$BINARY" ] || fail "PyInstaller did not produce $BINARY"
 
 printf 'build.sh: smoke-testing %s\n' "$BINARY"
 BUILT=$("$BINARY" --version) || fail "$BINARY --version failed"
-EXPECTED="ImageSwiper $("$VENV/bin/python" -c 'import image_swiper; print(image_swiper.__version__)')"
+EXPECTED="Swipey Photos $("$VENV/bin/python" -c 'import swipey_photos; print(swipey_photos.__version__)')"
 [ "$BUILT" = "$EXPECTED" ] || fail "version mismatch: expected '$EXPECTED', got '$BUILT'"
 
 printf 'build.sh: %s (%s)\n' "$BINARY" "$BUILT"

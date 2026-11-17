@@ -2,7 +2,7 @@
 
 Responsibility
     Own the *area* the user drags in, not the gesture itself. ``SwipeWidget``
-    keeps one :class:`~image_swiper.ui.swipe_card.SwipeCard` centred and covering
+    keeps one :class:`~swipey_photos.ui.swipe_card.SwipeCard` centred and covering
     the stage, hands it the next preview pixmap and re-emits the card's
     committed category as :attr:`SwipeWidget.swipe_committed`, which is the only
     thing the main window needs to know about a gesture. It never touches the
@@ -14,13 +14,13 @@ Relationship to SwipeCard
     GOOD/BAD/GREAT/OK badge, the fly-out animation and the keyboard map all live
     there, so the card can be demoed on its own::
 
-        python -m image_swiper.ui.swipe_card
+        python -m swipey_photos.ui.swipe_card
 
     This module adds what needs a stage around the card: a geometry owner, a
     caption line, image hand-off (``set_pixmap`` re-arms the card) and an
     *interactive* flag the window clears while a move is in flight. Deck-level
     animation choreography (the next card flying in) belongs to
-    :mod:`image_swiper.ui.animator` and is not part of this widget.
+    :mod:`swipey_photos.ui.animator` and is not part of this widget.
 
 Public API
     class CardStage(QWidget):              # geometry owner around one card
@@ -52,7 +52,7 @@ Input rules
 
 Animation
     Handing over an image also starts the deck-level entrance animation through
-    :class:`~image_swiper.ui.animator.CardAnimator`: the new card fades in over
+    :class:`~swipey_photos.ui.animator.CardAnimator`: the new card fades in over
     150 ms, and slides in from the opposite side when the window passes the
     direction of the previous decision. ``animation_ms=0`` makes it instant.
 """

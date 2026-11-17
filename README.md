@@ -1,32 +1,33 @@
-# ImageSwiper
+# Swipey Photos
 
 > Sort a folder of photos by feel, not by filename.
 
-**ImageSwiper** is a Linux desktop application for culling and sorting image
+**Swipey Photos** is a Linux desktop application for culling and sorting image
 folders with Tinder-style swipe gestures. Point it at a folder, swipe each
-picture left, right, up or down, and ImageSwiper moves it into the matching
+picture left, right, up or down, and Swipey Photos moves it into the matching
 subfolder. No tagging dialogs, no multi-select gymnastics — one decisive
 gesture per photo.
 
-[![ci](https://github.com/torreyn/image-swiper/actions/workflows/ci.yml/badge.svg)](https://github.com/torreyn/image-swiper/actions/workflows/ci.yml)
-[![release](https://img.shields.io/github/v/release/torreyn/image-swiper?sort=semver&display_name=tag)](https://github.com/torreyn/image-swiper/releases/latest)
+[![ci](https://github.com/torreyn/swipey-photos/actions/workflows/ci.yml/badge.svg)](https://github.com/torreyn/swipey-photos/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/torreyn/swipey-photos?sort=semver&display_name=tag)](https://github.com/torreyn/swipey-photos/releases/latest)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![Qt](https://img.shields.io/badge/Qt-6-green.svg)](https://www.qt.io/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 [![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-orange.svg)](CHANGELOG.md)
 [![Status](https://img.shields.io/badge/status-v1.0%20released-green.svg)](#project-status)
 
-> **Name note.** `ImageSwiper` is the working title, and the package/CLI
-> identifiers (`image_swiper`, `image-swiper`) follow it. The suggested
-> product name is **FlickSort** — shorter, pronounceable, and describes the
-> interaction better. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#13-naming)
-> for the rename checklist (it is a mechanical `grep` + two metadata edits).
+> **Name.** The app is **Swipey Photos**, and the package (`swipey_photos`), the
+> command (`swipey-photos`), the desktop entry and the config folder all follow
+> it. It was called *ImageSwiper* during development and renamed before the first
+> release, so nothing has to be migrated — see
+> [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#13-naming) for the identifier rules
+> and the checklist a future rename would follow.
 
 ---
 
 ## Screenshots
 
-![ImageSwiper main window — placeholder mock-up](docs/assets/screenshot-main.svg)
+![Swipey Photos main window — placeholder mock-up](docs/assets/screenshot-main.svg)
 
 *Placeholder mock-up, not a capture of the real window.* Replacing it is a
 five-minute job: [`screenshots/README.md`](screenshots/README.md) has a
@@ -58,10 +59,10 @@ configuration and rotating logs. The Qt side is wired up too: the swipe card
 around it, the welcome screen with recent folders, the completion summary and the
 main window (menus, progress, arrow-labelled footer buttons, live status-bar
 counts, config persistence). Install it with `pipx install
-git+https://github.com/torreyn/image-swiper.git`, download the standalone binary
-from the [latest release](https://github.com/torreyn/image-swiper/releases/latest),
-or work from a checkout with `pip install .`; then run `image-swiper` or
-`python -m image_swiper` and sort a folder end to end (397 tests, green on Python
+git+https://github.com/torreyn/swipey-photos.git`, download the standalone binary
+from the [latest release](https://github.com/torreyn/swipey-photos/releases/latest),
+or work from a checkout with `pip install .`; then run `swipey-photos` or
+`python -m swipey_photos` and sort a folder end to end (397 tests, green on Python
 3.11–3.13 in CI, ~94 % statement coverage). `packaging/` adds the `.desktop`
 entry, the generated icon theme and an AppImage build script, and
 `scripts/build.sh` produces the one-file binary — see
@@ -100,7 +101,7 @@ Everything below ships in v1.0 unless marked otherwise:
 - **Looks the part.** Rounded card with a blurred drop shadow, a 150 ms fade-in
   for each new image, footer buttons that spell out their swipe (`← Bad`,
   `↓ OK`, `↑ Great`, `Good →`) and a live per-category summary bar at the bottom.
-- **Safe to try.** `image-swiper --dry-run FOLDER` logs what it *would* move and
+- **Safe to try.** `swipey-photos --dry-run FOLDER` logs what it *would* move and
   leaves every file untouched, so you can rehearse a sort first.
 - **Fits your desktop.** `packaging/install-desktop.sh` adds a menu entry and a
   `hicolor` icon set (no desktop-file editing by hand), and
@@ -118,7 +119,7 @@ Everything below ships in v1.0 unless marked otherwise:
 ### Non-goals (v1.x)
 
 - Cloud sync, AI/ML auto-tagging, RAW development, or editing pixels.
-- Database-backed libraries. ImageSwiper operates directly on your folder.
+- Database-backed libraries. Swipey Photos operates directly on your folder.
 - Windows/macOS builds. The code stays portable, but Linux is the target.
 
 ---
@@ -140,9 +141,9 @@ bindings expose the same Qt 6 API surface for everything this app needs
 (`QWidget`, `QPropertyAnimation`, `QThreadPool`, `QGraphicsView`).
 
 One caveat worth knowing up front: PyQt6 is **GPL v3 / commercial**, while
-PySide6 is **LGPL v3**. If you ever plan to ship ImageSwiper as a closed-source
+PySide6 is **LGPL v3**. If you ever plan to ship Swipey Photos as a closed-source
 binary, either buy a Riverbank licence or switch the binding. Because all Qt
-imports live in `image_swiper/ui/` (and `app.py`), the switch is confined to
+imports live in `swipey_photos/ui/` (and `app.py`), the switch is confined to
 the UI layer — see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#2-toolkit-decision).
 
 ---
@@ -183,29 +184,29 @@ sudo pacman -S --needed python python-pip python-virtualenv \
 > Missing `libxcb-cursor0` is the single most common cause of
 > `qt.qpa.plugin: Could not load the Qt platform plugin "xcb"`.
 
-### 2. Install ImageSwiper
+### 2. Install Swipey Photos
 
-ImageSwiper is not on PyPI yet. Pick one of three routes.
+Swipey Photos is not on PyPI yet. Pick one of three routes.
 
-**pipx — isolated, puts `image-swiper` on your `PATH`**
+**pipx — isolated, puts `swipey-photos` on your `PATH`**
 
 ```bash
-pipx install git+https://github.com/torreyn/image-swiper.git
-image-swiper --version          # ImageSwiper 1.0.0
+pipx install git+https://github.com/torreyn/swipey-photos.git
+swipey-photos --version  # Swipey Photos 1.0.0
 ```
 
 Updating means re-running the same command with `--force`:
 
 ```bash
-pipx install --force git+https://github.com/torreyn/image-swiper.git          # newest tag
-pipx install --force git+https://github.com/torreyn/image-swiper.git@main     # bleeding edge
+pipx install --force git+https://github.com/torreyn/swipey-photos.git          # newest tag
+pipx install --force git+https://github.com/torreyn/swipey-photos.git@main     # bleeding edge
 ```
 
 **From a checkout — for development**
 
 ```bash
-git clone https://github.com/torreyn/image-swiper.git
-cd image-swiper
+git clone https://github.com/torreyn/swipey-photos.git
+cd swipey-photos
 
 python3 -m venv .venv
 source .venv/bin/activate          # fish: source .venv/bin/activate.fish
@@ -217,18 +218,18 @@ Runtime-only install from the checkout, without the dev tooling:
 
 ```bash
 pip install -r requirements.txt
-pip install -e .            # optional: gives you the `image-swiper` command
+pip install -e .            # optional: gives you the `swipey-photos` command
 ```
 
 **Standalone binary — no Python required**
 
-Download `image-swiper-<version>-linux-x86_64` from the
-[latest release](https://github.com/torreyn/image-swiper/releases/latest):
+Download `swipey-photos-<version>-linux-x86_64` from the
+[latest release](https://github.com/torreyn/swipey-photos/releases/latest):
 
 ```bash
-chmod +x image-swiper-1.0.0-linux-x86_64
-./image-swiper-1.0.0-linux-x86_64 --version
-./image-swiper-1.0.0-linux-x86_64 ~/Pictures/unsorted
+chmod +x swipey-photos-1.0.0-linux-x86_64
+./swipey-photos-1.0.0-linux-x86_64 --version
+./swipey-photos-1.0.0-linux-x86_64 ~/Pictures/unsorted
 ```
 
 The file carries CPython, PyQt6 and Pillow in one executable, but not glibc and
@@ -236,12 +237,12 @@ not the X11 client libraries, so the *system packages* from step 1 are still
 required. To build it yourself:
 
 ```bash
-./scripts/build.sh                 # venv + PyInstaller -> dist/image-swiper
+./scripts/build.sh                 # venv + PyInstaller -> dist/swipey-photos
 ./scripts/build.sh --help          # --venv, --output, --clean, PIP_ARGS
 ```
 
 `scripts/build.sh` and the release workflow share
-[`image-swiper.spec`](image-swiper.spec), so a local build and the published
+[`swipey-photos.spec`](swipey-photos.spec), so a local build and the published
 asset cannot drift apart. For a bundle that also contains the Qt system
 libraries, use the AppImage script instead
 ([`docs/PACKAGING.md` §4](docs/PACKAGING.md#4-appimage)).
@@ -249,8 +250,8 @@ libraries, use the AppImage script instead
 ### 3. Verify the installation
 
 ```bash
-python -c "import image_swiper; print(image_swiper.__version__)"
-image-swiper --version      # prints "ImageSwiper 1.0.0"
+python -c "import swipey_photos; print(swipey_photos.__version__)"
+swipey-photos --version      # prints "Swipey Photos 1.0.0"
 ```
 
 ### 4. Add it to your application menu
@@ -260,19 +261,19 @@ image-swiper --version      # prints "ImageSwiper 1.0.0"
 sudo ./packaging/install-desktop.sh --prefix /usr   # every user
 ```
 
-The entry appears as **ImageSwiper → Photo Sorter** with its own icon.
+The entry appears as **Swipey Photos → Photo Sorter** with its own icon.
 `--uninstall` removes it again; `--destdir` stages a distribution package.
 Paths, icon regeneration and the AppImage build live in
 [`docs/PACKAGING.md`](docs/PACKAGING.md).
 
 > A menu launcher does not inherit an activated virtualenv: it runs
-> `image-swiper` from `PATH`. If you installed into `.venv`, either point the
+> `swipey-photos` from `PATH`. If you installed into `.venv`, either point the
 > install step at a user prefix (`pipx install .` or `pip install --user .`) or
 > edit `Exec=` in the installed `.desktop` file to the absolute path of the
 > script.
 
 > **No Python on the target machine?** Download the standalone binary from the
-> [latest release](https://github.com/torreyn/image-swiper/releases/latest), or
+> [latest release](https://github.com/torreyn/swipey-photos/releases/latest), or
 > build one with `./scripts/build.sh`. If you also want the Qt system libraries
 > inside the bundle, `packaging/appimage/build-appimage.sh` produces a
 > single-file AppImage. Flatpak is not shipped yet;
@@ -286,9 +287,9 @@ Paths, icon regeneration and the AppImage build live in
 1. **Launch** the app:
 
    ```bash
-   image-swiper                      # reopens the last folder, or the picker
-   image-swiper ~/Pictures/unsorted  # skip the picker
-   image-swiper --dry-run ~/Pictures/unsorted   # rehearse: files are never moved
+   swipey-photos                      # reopens the last folder, or the picker
+   swipey-photos ~/Pictures/unsorted  # skip the picker
+   swipey-photos --dry-run ~/Pictures/unsorted  # rehearse: files are never moved
    ```
 
    `--dry-run` logs `dry run: would move …` for every decision, updates the
@@ -297,7 +298,7 @@ Paths, icon regeneration and the AppImage build live in
    sort. `--config PATH` reads and writes an alternative settings file and
    `-v` echoes the log to stderr.
 
-2. **Pick a folder.** On a first run ImageSwiper shows a welcome page with a big
+2. **Pick a folder.** On a first run Swipey Photos shows a welcome page with a big
    *Select Folder* button and the five folders you opened last. It scans the
    chosen folder for supported image files (`.jpg`, `.jpeg`, `.png`, `.webp`,
    `.bmp`, `.gif`, `.tif`, `.tiff`).
@@ -313,7 +314,7 @@ Paths, icon regeneration and the AppImage build live in
 6. **Finish.** When the folder is drained, a summary shows how many images went
    where, and offers to rescan the folder, pick another one, or quit.
 
-ImageSwiper **never deletes or overwrites** anything. Subfolders it creates look
+Swipey Photos **never deletes or overwrites** anything. Subfolders it creates look
 like this:
 
 ```text
@@ -356,10 +357,10 @@ Arrow keys always work.
 
 ## Configuration
 
-ImageSwiper is configured with a single human-editable JSON file:
+Swipey Photos is configured with a single human-editable JSON file:
 
 ```text
-${XDG_CONFIG_HOME:-~/.config}/image-swiper/config.json
+${XDG_CONFIG_HOME:-~/.config}/swipey-photos/config.json
 ```
 
 The file is written on first save (when the window closes). A minimal example:
@@ -385,7 +386,7 @@ Unknown keys are ignored with a warning, so a file from a newer build still
 loads. The file is replaced atomically with mode `0600`.
 
 Logs are written to
-`${XDG_DATA_HOME:-~/.local/share}/image-swiper/logs/image-swiper.log`, rotated at
+`${XDG_DATA_HOME:-~/.local/share}/swipey-photos/logs/swipey-photos.log`, rotated at
 2 MiB with three backups.
 
 Full key-by-key reference, precedence rules and migration notes:
@@ -396,10 +397,10 @@ Full key-by-key reference, precedence rules and migration notes:
 ## Project structure
 
 ```text
-image-swiper/
-├── src/image_swiper/          # importable package (src layout)
+swipey-photos/
+├── src/swipey_photos/         # importable package (src layout)
 │   ├── __init__.py            # version + public package docstring
-│   ├── __main__.py            # `python -m image_swiper` / `image-swiper` entry point
+│   ├── __main__.py            # `python -m swipey_photos` / `swipey-photos` entry point
 │   ├── app.py                 # QApplication bootstrap, wiring, lifecycle
 │   ├── py.typed               # PEP 561 marker (type info ships with the wheel)
 │   ├── ui/                    # Qt-only layer (all PyQt6 imports live here)
@@ -424,11 +425,11 @@ image-swiper/
 │       └── logging_setup.py   # rotating file logs + optional console handler
 ├── tests/                     # pytest suites mirroring src/ (pytest-qt for GUI)
 ├── scripts/
-│   └── build.sh               # venv + PyInstaller -> dist/image-swiper
-├── image-swiper.spec          # PyInstaller recipe shared by build.sh and CI
+│   └── build.sh               # venv + PyInstaller -> dist/swipey-photos
+├── swipey-photos.spec         # PyInstaller recipe shared by build.sh and CI
 ├── screenshots/               # capture guide + reference images (placeholders)
 ├── packaging/                 # desktop integration, no Python imports needed
-│   ├── image-swiper.desktop   # menu entry: Exec=image-swiper, Icon=image-swiper
+│   ├── swipey-photos.desktop  # menu entry: Exec=swipey-photos, Icon=swipey-photos
 │   ├── install-desktop.sh     # install/uninstall entry + icons (prefix/destdir)
 │   ├── icons/hicolor/         # generated PNG sizes + one scalable SVG
 │   ├── render_icons.py        # regenerate the icon tree from ui/branding.py
@@ -482,13 +483,13 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 
-python -m image_swiper            # run from source
+python -m swipey_photos            # run from source
 pytest -q                         # unit tests
 QT_QPA_PLATFORM=offscreen pytest -q -m gui   # headless GUI tests
-pytest -q --cov=image_swiper --cov-report=term-missing   # coverage
+pytest -q --cov=swipey_photos --cov-report=term-missing   # coverage
 ruff check . && ruff format --check .
 mypy
-./scripts/build.sh                # standalone binary -> dist/image-swiper
+./scripts/build.sh                # standalone binary -> dist/swipey-photos
 ```
 
 CI runs `ruff check`, `ruff format --check`, strict `mypy`, the full suite with
@@ -538,12 +539,12 @@ suffix instead of overwriting anything. When a destination lives on another
 filesystem, the app copies the file, verifies the byte count and only then
 removes the source, because a rename cannot cross devices. Nothing is ever
 deleted — `Bad/` is just a folder, and emptying it is your decision. Rehearse the
-whole thing with `image-swiper --dry-run FOLDER`, which logs what would move and
+whole thing with `swipey-photos --dry-run FOLDER`, which logs what would move and
 touches no file.
 
 **Does it delete rejected photos?**
 No. Rejected images are moved to `Bad/` (or your configured folder). Nothing is
-ever deleted by ImageSwiper.
+ever deleted by Swipey Photos.
 
 **Will it touch files already in `Good/`?**
 No. Destination folders are excluded from the scan, so only not-yet-sorted
@@ -558,11 +559,16 @@ Touchscreens send synthetic mouse events, which the card already supports.
 Two-finger touchpad "flick" gestures depend on the compositor; the keyboard
 bindings are the reliable fallback.
 
+**How can I support the project?**
+*Help → About* carries a **Buy me a coffee** button that opens
+<https://buymeacoffee.com/2re.me>. Bug reports and a star on the repository help
+just as much.
+
 ---
 
 ## License
 
-Released under the [MIT License](LICENSE) — © 2026 ImageSwiper contributors.
+Released under the [MIT License](LICENSE) — © 2026 Swipey Photos contributors.
 
 Qt is © The Qt Company and is used through PyQt6 (GPL v3 / commercial) or
 PySide6 (LGPL v3); see [Requirements](#pyqt6-vs-pyside6). Pillow is licensed

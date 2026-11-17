@@ -1,4 +1,4 @@
-# ImageSwiper documentation
+# Swipey Photos documentation
 
 Start here if you want the *why* before the *how*. The README covers installing
 and using the app; this folder covers design, configuration and hacking.
@@ -8,7 +8,7 @@ and using the app; this folder covers design, configuration and hacking.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | you want the toolkit rationale, layer rules, component contracts, threading model, invariants or milestone exit criteria | contributors, reviewers |
 | [CONFIGURATION.md](CONFIGURATION.md) | you need every config key, its default, range and failure behaviour | users, packagers |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | you are setting up a checkout, running tests, debugging Qt, building the binary or preparing a release | contributors |
-| [PACKAGING.md](PACKAGING.md) | you are packaging ImageSwiper, installing the desktop entry, building a binary or AppImage, or preparing a tagged release | packagers, maintainers |
+| [PACKAGING.md](PACKAGING.md) | you are packaging Swipey Photos, installing the desktop entry, building a binary or AppImage, or preparing a tagged release | packagers, maintainers |
 | [assets/](assets/) | you are replacing the placeholder mock-ups | contributors |
 | [../screenshots/](../screenshots/) | you are capturing real screenshots (offscreen recipe, sizes, naming) | contributors |
 | [../CHANGELOG.md](../CHANGELOG.md) | you want the version history in Keep a Changelog form | users, packagers |

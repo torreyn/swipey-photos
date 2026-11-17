@@ -23,11 +23,11 @@ from typing import TYPE_CHECKING
 import pytest
 from PyQt6.QtCore import QTimer
 
-from image_swiper import __version__
-from image_swiper import app as app_module
-from image_swiper.__main__ import build_parser, main
-from image_swiper.ui.main_window import MainWindow
-from image_swiper.utils.config import Config
+from swipey_photos import __version__
+from swipey_photos import app as app_module
+from swipey_photos.__main__ import build_parser, main
+from swipey_photos.ui.main_window import MainWindow
+from swipey_photos.utils.config import Config
 
 if TYPE_CHECKING:
     from pytestqt.qtbot import QtBot
@@ -43,7 +43,7 @@ def test_version_flag_prints_and_exits(
     assert main(["--version"]) == 0
 
     captured = capsys.readouterr()
-    assert "ImageSwiper" in captured.out
+    assert "Swipey Photos" in captured.out
     assert __version__ in captured.out
 
 
@@ -64,7 +64,7 @@ def test_dry_run_flag_is_forwarded_to_run(
     monkeypatch: pytest.MonkeyPatch, xdg_dirs: dict[str, Path]
 ) -> None:
     """``--dry-run`` reaches the composition root instead of being ignored."""
-    from image_swiper import __main__ as entry_point
+    from swipey_photos import __main__ as entry_point
 
     recorded: dict[str, object] = {}
 
@@ -97,8 +97,8 @@ def test_build_main_window_applies_the_identity(
     assert isinstance(window, MainWindow)
     assert window.current_page == "welcome"
     assert not window.windowIcon().isNull()
-    assert qapp.applicationName() == "image-swiper"  # type: ignore[attr-defined]
-    assert qapp.applicationDisplayName() == "ImageSwiper"  # type: ignore[attr-defined]
+    assert qapp.applicationName() == "swipey-photos"  # type: ignore[attr-defined]
+    assert qapp.applicationDisplayName() == "Swipey Photos"  # type: ignore[attr-defined]
     assert qapp.applicationVersion() == __version__  # type: ignore[attr-defined]
 
 
@@ -124,7 +124,7 @@ def _run_until_closed(
     QTimer.singleShot(150, inspect)
     QTimer.singleShot(DIALOG_TIMEOUT_MS, qapp.quit)  # type: ignore[attr-defined]
     code = app_module.run(
-        ["image-swiper"],
+        ["swipey-photos"],
         config=config,
         config_path=config_path,
         folder=folder,

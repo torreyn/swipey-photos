@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to ImageSwiper are documented in this file.
+All notable changes to Swipey Photos are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -13,8 +13,20 @@ artefact. New entries go under `[Unreleased]` and move down when a tag is cut �
 
 ## [Unreleased]
 
+### Added
+
+- The About box has a **Buy me a coffee** button that opens
+  <https://buymeacoffee.com/2re.me> in the default browser
+  (`ui.branding.SUPPORT_URL`); *Close* stays the default action.
+
 ### Changed
 
+- The app is now **Swipey Photos**. The rename covers the import package
+  (`swipey_photos`), the command (`swipey-photos`), the desktop entry and icon
+  stem (`swipey-photos`), the logger namespace, and the state directories
+  (`~/.config/swipey-photos/`, `~/.local/share/swipey-photos/logs/`). Because
+  `1.0.0` was never tagged, there is nothing to migrate: reinstall (the old
+  `image-swiper` command and config directory can be deleted).
 - The four footer buttons now spell out the gesture they trigger — `← Bad`,
   `↓ OK`, `↑ Great`, `Good →` — so the swipe map is legible without hovering a
   tooltip. The labels live in `ui.main_window.CATEGORY_BUTTON_LABELS`.
@@ -23,7 +35,7 @@ artefact. New entries go under `[Unreleased]` and move down when a tag is cut �
   space to the image.
 - CI reports coverage (`pytest-cov`) and runs the GUI suite a second time on a
   virtual X server, so the `xcb` platform plugin is exercised too.
-- Added a PyInstaller recipe (`image-swiper.spec`), `scripts/build.sh` and a
+- Added a PyInstaller recipe (`swipey-photos.spec`), `scripts/build.sh` and a
   tag-triggered release workflow; `pip install ".[binary]"` is the only extra
   requirement for building a standalone executable.
 
@@ -53,9 +65,9 @@ integration ship together; everything listed below is in the release artefact.
 - **Welcome and summary pages** — recent-folder shortcuts and a per-category
   tally with restart/pick/quit actions at the end of a folder.
 - **Configuration and logs** — human-editable JSON at
-  `${XDG_CONFIG_HOME}/image-swiper/config.json` (window size, theme, last and
+  `${XDG_CONFIG_HOME}/swipey-photos/config.json` (window size, theme, last and
   recent folders), written atomically with mode `0600`; rotating logs with three
-  backups under `${XDG_DATA_HOME}/image-swiper/logs/`.
+  backups under `${XDG_DATA_HOME}/swipey-photos/logs/`.
 - **`--dry-run`** — logs every decision and touches no file, for rehearsing a
   sort; `--config` and `-v` for alternate settings and console logging.
 - **Dark mode** — live palette switch from *View → Dark Mode*, or `"theme"` in
@@ -86,5 +98,5 @@ integration ship together; everything listed below is in the release artefact.
 - There is no PyPI release; install from a wheel, from a checkout, with
   `pipx install git+…`, or use the standalone binary.
 
-[Unreleased]: https://github.com/torreyn/image-swiper/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/torreyn/image-swiper/releases/tag/v1.0.0
+[Unreleased]: https://github.com/torreyn/swipey-photos/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/torreyn/swipey-photos/releases/tag/v1.0.0

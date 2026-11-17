@@ -1,21 +1,21 @@
-"""Command-line entry point for ImageSwiper.
+"""Command-line entry point for Swipey Photos.
 
 This module is the only supported way to start the application. It is reachable
 in two ways:
 
-* ``python -m image_swiper`` — used while developing from a source checkout.
-* ``image-swiper`` — the console script declared in ``pyproject.toml`` as
-  ``image-swiper = image_swiper.__main__:main``.
+* ``python -m swipey_photos`` — used while developing from a source checkout.
+* ``swipey-photos`` — the console script declared in ``pyproject.toml`` as
+  ``swipey-photos = swipey_photos.__main__:main``.
 
 Responsibilities
     1. Parse the small command-line surface (an optional starting folder,
        ``--version``, ``--config``, ``--log-level``, ``--verbose`` and
        ``--dry-run``).
-       Argument parsing lives here rather than in :mod:`image_swiper.app` so the
+       Argument parsing lives here rather than in :mod:`swipey_photos.app` so the
        app module stays importable without touching ``sys.argv``.
-    2. Configure logging with :func:`image_swiper.utils.logging_setup.setup_logging`
+    2. Configure logging with :func:`swipey_photos.utils.logging_setup.setup_logging`
        before anything can fail, so startup problems reach the log file.
-    3. Delegate to :func:`image_swiper.app.run` and return its exit code.
+    3. Delegate to :func:`swipey_photos.app.run` and return its exit code.
 
 Design notes
     * ``--version`` is answered before Qt is imported, so it also works on a
@@ -44,11 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
     """Return the argument parser used by :func:`main`.
 
     Returns:
-        A parser for ``image-swiper [FOLDER] [options]`` with ``--help`` text
+        A parser for ``swipey-photos [FOLDER] [options]`` with ``--help`` text
         that mirrors the documented CLI.
     """
     parser = argparse.ArgumentParser(
-        prog="image-swiper",
+        prog="swipey-photos",
         description=(
             "Sort a folder of photos into Good, Bad, Great and OK subfolders by "
             "swiping or pressing a key."
@@ -117,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"logging to {log_file}", file=sys.stderr)
 
     if args.version:
-        print(f"ImageSwiper {__version__}")
+        print(f"Swipey Photos {__version__}")
         return 0
 
     return run(

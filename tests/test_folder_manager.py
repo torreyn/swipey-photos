@@ -7,16 +7,16 @@ from pathlib import Path
 
 import pytest
 
-from image_swiper.core.folder_manager import (
+from swipey_photos.core.folder_manager import (
     CATEGORIES,
     CategoryError,
     FolderManager,
     SourceFolderError,
     normalize_category,
 )
-from image_swiper.utils.file_ops import SourceNotFoundError
+from swipey_photos.utils.file_ops import SourceNotFoundError
 
-LOGGER_NAME = "image_swiper"
+LOGGER_NAME = "swipey_photos"
 
 
 def test_constructor_creates_all_category_folders(sample_folder: Path) -> None:

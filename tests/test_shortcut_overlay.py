@@ -25,7 +25,7 @@ import pytest
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel
 
-from image_swiper.ui.shortcut_overlay import SHORTCUT_GROUPS, ShortcutOverlay
+from swipey_photos.ui.shortcut_overlay import SHORTCUT_GROUPS, ShortcutOverlay
 
 if TYPE_CHECKING:
     from pytestqt.qtbot import QtBot
@@ -97,7 +97,7 @@ def test_widget_renders_a_cap_and_a_description_per_row(overlay: ShortcutOverlay
     assert len(descriptions) == len(pairs)
     assert [cap.text() for cap in caps] == [keys for keys, _description in pairs]
     assert overlay.objectName() == "shortcut_overlay"
-    assert "ImageSwiper" in overlay.windowTitle()
+    assert "Swipey Photos" in overlay.windowTitle()
     assert overlay.close_button.text() == "Close"
     assert not overlay.isModal()
 

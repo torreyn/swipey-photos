@@ -1,11 +1,11 @@
 # Configuration reference
 
-ImageSwiper keeps its session settings in one small JSON file. There is no hidden
+Swipey Photos keeps its session settings in one small JSON file. There is no hidden
 database and no `QSettings` blob — you can read, diff, edit and back up the file
 by hand.
 
 > This document describes the schema implemented in
-> [`src/image_swiper/utils/config.py`](../src/image_swiper/utils/config.py).
+> [`src/swipey_photos/utils/config.py`](../src/swipey_photos/utils/config.py).
 > Read/write support landed with the core layer (M1); the UI writes the file when
 > the window closes (M2).
 
@@ -13,12 +13,12 @@ by hand.
 
 | Purpose | Path |
 | --- | --- |
-| Configuration | `${XDG_CONFIG_HOME:-~/.config}/image-swiper/config.json` |
-| Log file | `${XDG_DATA_HOME:-~/.local/share}/image-swiper/logs/image-swiper.log` |
-| Log rotations | same directory, `image-swiper.log.1` … `.3` |
+| Configuration | `${XDG_CONFIG_HOME:-~/.config}/swipey-photos/config.json` |
+| Log file | `${XDG_DATA_HOME:-~/.local/share}/swipey-photos/logs/swipey-photos.log` |
+| Log rotations | same directory, `swipey-photos.log.1` … `.3` |
 
 The file is created on the first save, with mode `0600`; its parent directory is
-created with `0700`. Until then ImageSwiper runs on the built-in defaults and
+created with `0700`. Until then Swipey Photos runs on the built-in defaults and
 never creates an empty file. Writes are atomic — a temporary file in the same
 directory is `fsync`ed and then `os.replace`d — so a crash cannot leave a
 half-written configuration behind.
@@ -101,7 +101,7 @@ redirect everything with `monkeypatch.setenv`.
 ## Command-line flags
 
 ```text
-image-swiper [FOLDER] [options]
+swipey-photos [FOLDER] [options]
 
   FOLDER                  start with this folder (skips the welcome page)
   --version               print version and exit
@@ -138,15 +138,15 @@ for you:
 **Start from scratch** — delete the file; defaults are back:
 
 ```bash
-rm ~/.config/image-swiper/config.json
+rm ~/.config/swipey-photos/config.json
 ```
 
 ## Reset and migration
 
 ```bash
 # Back up, then reset
-cp ~/.config/image-swiper/config.json ~/.config/image-swiper/config.json.bak
-rm ~/.config/image-swiper/config.json
+cp ~/.config/swipey-photos/config.json ~/.config/swipey-photos/config.json.bak
+rm ~/.config/swipey-photos/config.json
 ```
 
 The app writes a fresh file with defaults the next time it saves.
@@ -160,8 +160,8 @@ warning instead of guessing at unknown keys.
 
 | Symptom | Cause / fix |
 | --- | --- |
-| Settings do not stick | config directory not writable; check `ls -ld ~/.config/image-swiper` and the log |
-| App ignores my edits | invalid JSON earlier in the file — validate with `python -m json.tool ~/.config/image-swiper/config.json` |
+| Settings do not stick | config directory not writable; check `ls -ld ~/.config/swipey-photos` and the log |
+| App ignores my edits | invalid JSON earlier in the file — validate with `python -m json.tool ~/.config/swipey-photos/config.json` |
 | "window.width must be an integer" | JSON has a string where a number belongs (`"width": "800"`) |
 | Window opens at the default size | `window.width`/`height` outside 200–20000, or the file failed to parse (see the log) |
 | Theme keeps reverting to system | `theme` is not one of `system`, `light`, `dark` |

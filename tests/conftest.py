@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the ImageSwiper test suite.
+"""Shared pytest fixtures for the Swipey Photos test suite.
 
 Fixtures
     ``make_images``
@@ -9,12 +9,12 @@ Fixtures
     ``sample_folder``
         ``tmp_path/photos`` containing three valid images.
     ``config``
-        A :class:`~image_swiper.utils.config.Config` with test-friendly values.
+        A :class:`~swipey_photos.utils.config.Config` with test-friendly values.
     ``xdg_dirs``
         Overrides ``XDG_CONFIG_HOME``/``XDG_DATA_HOME``/``XDG_STATE_HOME``/
         ``XDG_CACHE_HOME`` so no test can touch the developer's real files.
     ``isolated_logging``
-        Routes the ``image_swiper`` logger into ``tmp_path/logs`` and detaches
+        Routes the ``swipey_photos`` logger into ``tmp_path/logs`` and detaches
         the handlers again afterwards.
     ``fake_file_dialog``
         Replaces ``QFileDialog`` in the UI modules with
@@ -24,7 +24,7 @@ Conventions
     * Tests never touch the developer's real Pictures folder or real config:
       always ``tmp_path`` plus the ``xdg_dirs`` fixture.
     * Test files mirror the source tree: ``tests/test_sorter.py`` covers
-      ``src/image_swiper/core/sorter.py``.
+      ``src/swipey_photos/core/sorter.py``.
     * GUI tests use ``qtbot`` from pytest-qt and must be marked
       ``@pytest.mark.gui``.
 """
@@ -39,8 +39,8 @@ import pytest
 from PIL import Image
 
 from helpers import FakeFileDialog
-from image_swiper.utils.config import Config, WindowConfig
-from image_swiper.utils.logging_setup import LOGGER_NAME, setup_logging
+from swipey_photos.utils.config import Config, WindowConfig
+from swipey_photos.utils.logging_setup import LOGGER_NAME, setup_logging
 
 SUFFIXES: dict[str, str] = {
     "JPEG": ".jpg",
@@ -138,7 +138,7 @@ def fake_file_dialog(monkeypatch: pytest.MonkeyPatch) -> type[FakeFileDialog]:
     The module globals are patched rather than the PyQt6 class, because SIP
     types reject attribute assignment.
     """
-    from image_swiper.ui import main_window, welcome_screen
+    from swipey_photos.ui import main_window, welcome_screen
 
     FakeFileDialog.result = ""
     FakeFileDialog.calls = []
@@ -155,7 +155,7 @@ def dialogs(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str, str]]:
         A list that receives ``(kind, title, message)`` tuples for every call
         to ``MainWindow._report_info``/``_report_warning``/``_report_error``.
     """
-    from image_swiper.ui.main_window import MainWindow as Window
+    from swipey_photos.ui.main_window import MainWindow as Window
 
     recorded: list[tuple[str, str, str]] = []
     for suffix in ("info", "warning", "error"):

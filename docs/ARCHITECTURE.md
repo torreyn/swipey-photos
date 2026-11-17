@@ -7,7 +7,7 @@
 
 ## 1. Purpose and scope
 
-ImageSwiper does one job: present the images of a folder one at a time, capture
+Swipey Photos does one job: present the images of a folder one at a time, capture
 a four-way decision per image, and move the file into the matching subfolder
 without ever destroying data. Everything in this document serves that loop.
 
@@ -38,11 +38,11 @@ The project uses **PyQt6** (GPL v3 / commercial). It is mature, well typed, and
 ships Qt 6 wheels on PyPI.
 
 The alternative, **PySide6**, is Qt's official binding under **LGPL v3**. If
-ImageSwiper is ever distributed as a closed-source binary — or linked
+Swipey Photos is ever distributed as a closed-source binary — or linked
 statically — PySide6 is the legally simpler choice (dynamic linking under LGPL
 still carries relinking obligations).
 
-Mitigation for the licence risk: **every Qt import lives in `image_swiper/ui/`
+Mitigation for the licence risk: **every Qt import lives in `swipey_photos/ui/`
 and `app.py`.** `core/` and `utils/` are pure Python. Switching bindings is
 therefore a mechanical change of imports (`PyQt6` → `PySide6`, `pyqtSignal` →
 `Signal`) without touching the domain logic. A `qtpy` compatibility shim is
@@ -125,7 +125,7 @@ configuration file stays human-editable and greppable.
 ### Object graph (runtime)
 
 ```text
-ImageSwiperApplication (app.py)
+SwipeyPhotosApplication (app.py)
 ├── Config                      (utils/config.py, loaded once)
 ├── Sorter                      (core/sorter.py, one per session)
 │   └── FolderManager           (core/folder_manager.py)
@@ -151,7 +151,7 @@ ImageSwiperApplication (app.py)
 
 `app.py` is the composition root. `run()` sets the high-DPI rounding policy
 *before* constructing exactly one `QApplication`, sets `applicationName=
-"image-swiper"`, `applicationDisplayName="ImageSwiper"`, `organizationName`,
+"swipey-photos"`, `applicationDisplayName="Swipey Photos"`, `organizationName`,
 the version, the desktop file name and the window icon, installs the Qt message
 handler, loads config, calls `build_main_window()`, shows the window, opens the
 requested folder (or `MainWindow.restore_last_session()`), and returns
@@ -185,6 +185,7 @@ itself. Its slots translate UI intent into core calls:
 | `View → Dark Mode` | swaps the application palette (`ui/theme.py`) between light and dark and persists the choice |
 | `View → Full Screen` (F11) | `showFullScreen()`/`showNormal()`, with the menu tick resynchronised in `changeEvent` |
 | `Help → Keyboard Shortcuts` (F1, ?) | `ShortcutOverlay.show_overlay()`, one reused non-modal dialog |
+| `Help → About` | version, tagline and a *Buy me a coffee* button; `ui.branding.SUPPORT_URL` is opened through `QDesktopServices` |
 | `File → Undo Last` (Ctrl+Z) | `Sorter.undo()`, re-show the restored image (with the deck's entrance animation), return to the stage |
 | skip `QAction` (Space) | `Sorter.advance()`; the file stays in the folder |
 | `CompletionScreen.open_source_requested` | rescan the same folder |
@@ -403,8 +404,8 @@ actionable messages, and resolves XDG paths:
 
 | Purpose | Path |
 | --- | --- |
-| Config | `${XDG_CONFIG_HOME:-~/.config}/image-swiper/config.json` |
-| Logs | `${XDG_DATA_HOME:-~/.local/share}/image-swiper/logs/image-swiper.log` (2 MiB × 3 rotations) |
+| Config | `${XDG_CONFIG_HOME:-~/.config}/swipey-photos/config.json` |
+| Logs | `${XDG_DATA_HOME:-~/.local/share}/swipey-photos/logs/swipey-photos.log` (2 MiB × 3 rotations) |
 
 A missing file yields defaults. Malformed JSON raises `ConfigError` and invalid
 values raise `ConfigValidationError`, so the UI can show a message and continue
@@ -415,7 +416,7 @@ drops duplicates. Writes are atomic (tempfile + `fsync` + `os.replace`), with
 `0o600` for the file and `0o700` for the directory. A `version = 1` key reserves
 room for migrations. Precedence: CLI > environment > file > defaults.
 
-**`logging_setup`** configures one logger hierarchy (`image_swiper.*`) with a
+**`logging_setup`** configures one logger hierarchy (`swipey_photos.*`) with a
 rotating file handler plus an optional stderr handler, and exposes
 `logs_dir()`/`get_logger()`. It imports no Qt: the Qt message bridge belongs to
 the UI layer (M2). Levels follow CONTRIBUTING.md; there is no `print()` in
@@ -687,7 +688,7 @@ The design leaves room for these without restructuring:
   `Sorter` pair, since neither imports Qt.
 - **RAW support** — a format plugin behind `ImageLoader` (rawpy/`libraw`)
   returning the same `(PIL image, size)` pair; no UI changes.
-- **.desktop integration** — `Exec=image-swiper %f` plus a MIME handler; the
+- **.desktop integration** — `Exec=swipey-photos %f` plus a MIME handler; the
   CLI already accepts an optional starting folder in the design.
 
 Deliberately *not* designed for: multiple simultaneous sessions in one window
@@ -718,26 +719,40 @@ Qt's own API keeps its camelCase spelling (`pyqtSignal`, `saveGeometry`,
 style. `tests/test_architecture.py` fails on violations of the table above, so
 the convention cannot drift back.
 
-### 13.2 Product name: FlickSort
+### 13.2 Product name: Swipey Photos
 
-Working title: **ImageSwiper** (`image_swiper` package, `image-swiper` command).
-Recommended product name: **FlickSort** — shorter, easier to say in a sentence
-("just FlickSort it"), and it does not lean on someone else's trademark-adjacent
-"swipe" phrasing. A secondary option is **CullFlick**, which is more obviously
-about photo culling but longer.
+The product is **Swipey Photos**: package `swipey_photos`, command
+`swipey-photos`, desktop entry and icon stem `swipey-photos`, config directory
+`~/.config/swipey-photos`. It was called **ImageSwiper** from M0 to M6; the
+rename landed before the first public release, so nothing has to be migrated — a
+dev install only needs `pipx install --force …` or
+`pip install --force-reinstall .`, and the old `~/.config/image-swiper/` folder
+can simply be deleted.
 
-Identifiers stay on `image_swiper` until the rename, so the entry point matches
-the specification. The rename is mechanical:
+**FlickSort** was the alternative ("just FlickSort it" is a shorter pitch) and
+stays the fallback if a name search ever forces a change. The procedure is
+mechanical, and it lives here so a future rename does not have to rediscover it:
 
-1. `grep -rn "image[_-]swiper\|ImageSwiper" --exclude-dir=.git .`
-2. Rename `src/image_swiper/` → `src/flick_sort/` (and the inner imports).
-3. Update `[project] name`, `[project.scripts]`, `[tool.hatch.*]` paths,
-   `pytest pythonpath`, README badges, LICENSE copyright line.
-4. Update XDG folder names (`~/.config/image-swiper` → `~/.config/flick-sort`)
-   and the config `version` key; pre-1.0, a hard cut-over is acceptable.
+1. `git grep -In "swipey_photos\|swipey-photos\|Swipey Photos"` to enumerate
+   every occurrence, including the docs.
+2. `git mv src/swipey_photos src/<new_package>`. Imports inside the package are
+   relative, so only `pyproject.toml` and `packaging/pyinstaller/entry.py` name
+   the package absolutely.
+3. Update `[project] name`, `[project.scripts]`, the `[tool.hatch.*]` paths, the
+   mypy `files` and coverage `source` lists, the spec filename
+   (`swipey-photos.spec`), the README badges and URLs, `LICENSE`, and the
+   `Name=`/`Exec=`/`TryExec=`/`Icon=`/`StartupWMClass=` keys of the desktop
+   entry.
+4. Update the XDG folder names (`~/.config/swipey-photos`,
+   `~/.local/share/swipey-photos`), `LOGGER_NAME`, the icon and SVG stems under
+   `packaging/icons/` (then re-run `packaging/render_icons.py`), the paths in
+   `packaging/install-desktop.sh` and `packaging/appimage/build-appimage.sh`,
+   `scripts/build.sh`, and the asset name in the release workflow.
 
-Do the rename **before** the first public release, while there are no user
-config files to migrate.
+`tests/test_packaging.py` cross-checks the desktop entry, icon tree, spec,
+workflows and changelog against the constants, so a half-finished rename fails
+the suite instead of shipping. Post-1.0 a rename additionally needs a release
+note and — when the XDG directory changes — a one-time move of the old config.
 
 ## 14. Decision log
 
@@ -786,7 +801,7 @@ Tracked here so the implementation does not silently pick an answer:
   and read-only detection behave as documented in §9; every bound shortcut is
   listed in the `F1` overlay, and a rescan never loses the counters or the undo
   history.
-- **M5 (distribution)**: `pip install .` produces a working `image-swiper`
+- **M5 (distribution)**: `pip install .` produces a working `swipey-photos`
   command on a clean Debian/Fedora/Arch VM; a `.desktop` file launches it, the
   icon resolves through the `hicolor` theme, `install-desktop.sh --uninstall`
   removes it again, and the AppImage runs on a machine without Python.

@@ -1,6 +1,6 @@
-# Contributing to ImageSwiper
+# Contributing to Swipey Photos
 
-Thanks for considering a contribution! ImageSwiper is a small, focused Linux
+Thanks for considering a contribution! Swipey Photos is a small, focused Linux
 desktop app, and every bug report, UX observation or patch helps.
 
 By participating you agree to follow the
@@ -25,8 +25,8 @@ Be kind, assume good intent, and critique code — not people.
 ## Development setup
 
 ```bash
-git clone https://github.com/torreyn/image-swiper.git
-cd image-swiper
+git clone https://github.com/torreyn/swipey-photos.git
+cd swipey-photos
 
 python3 -m venv .venv
 source .venv/bin/activate
@@ -40,7 +40,7 @@ Qt still needs a few system libraries; the apt/dnf/pacman commands are in
 Verify the setup:
 
 ```bash
-python -c "import image_swiper; print(image_swiper.__version__)"
+python -c "import swipey_photos; print(swipey_photos.__version__)"
 pytest -q
 ```
 
@@ -80,7 +80,7 @@ app.py  →  ui/  →  core/  →  utils/
   enforces this, so camelCase helpers fail CI.
 - **Linting:** `ruff check .` with the configured rule set (`E`, `F`, `I`, `UP`,
   `B`, `SIM`, `RUF`).
-- **Types:** `mypy` in strict mode for `src/image_swiper`. New public functions
+- **Types:** `mypy` in strict mode for `src/swipey_photos`. New public functions
   need full annotations, including return types.
 - **Docstrings:** every module gets a one-paragraph docstring stating its
   responsibility. Public classes and functions use Google-style docstrings with
@@ -104,7 +104,7 @@ app.py  →  ui/  →  core/  →  utils/
 ```bash
 pytest -q                                  # headless unit tests
 QT_QPA_PLATFORM=offscreen pytest -q -m gui  # GUI tests (no display needed)
-pytest -q --cov=image_swiper --cov-report=term-missing   # coverage (pytest-cov)
+pytest -q --cov=swipey_photos --cov-report=term-missing   # coverage (pytest-cov)
 sh scripts/build.sh                        # optional: standalone binary, needs network
 ```
 
@@ -157,7 +157,7 @@ is pre-filled in the [PR template](.github/pull_request_template.md).
 - [ ] `ruff check .` — the configured rule set, no `# noqa` without a reason
 - [ ] `ruff format --check .` — **not** `black`: the project has exactly one
       formatter, and mixing the two makes CI unsatisfiable
-- [ ] `mypy` — strict, over `src/image_swiper`; new public functions are fully
+- [ ] `mypy` — strict, over `src/swipey_photos`; new public functions are fully
       annotated
 - [ ] `pytest -q` — includes `tests/test_architecture.py` (naming and Qt-free
       `core/`+`utils/`) and `tests/test_packaging.py` (artefacts and workflows)
@@ -178,13 +178,13 @@ is pre-filled in the [PR template](.github/pull_request_template.md).
 
 Include:
 
-- ImageSwiper version (`python -c "import image_swiper; print(image_swiper.__version__)"`)
+- Swipey Photos version (`python -c "import swipey_photos; print(swipey_photos.__version__)"`)
 - Distribution and version (`lsb_release -a` or `cat /etc/os-release`)
 - Session type (`echo $XDG_SESSION_TYPE`) and desktop environment
 - Python and Qt versions (`python -V`,
   `python -c "from PyQt6.QtCore import QT_VERSION_STR; print(QT_VERSION_STR)"`)
 - Steps to reproduce, expected vs. actual behaviour
-- Relevant log lines from `~/.local/share/image-swiper/logs/image-swiper.log`
+- Relevant log lines from `~/.local/share/swipey-photos/logs/swipey-photos.log`
   (redact file paths you consider private)
 
 For crashes, a backtrace from `gdb` or the Qt message output is gold.
@@ -193,7 +193,7 @@ For crashes, a backtrace from `gdb` or the Qt message output is gold.
 
 ## Licensing of contributions
 
-ImageSwiper is MIT licensed. By submitting a pull request you agree that your
+Swipey Photos is MIT licensed. By submitting a pull request you agree that your
 contribution is licensed under the same MIT terms (inbound = outbound). No
 CLA is required.
 

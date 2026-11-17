@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from image_swiper.utils.logging_setup import (
+from swipey_photos.utils.logging_setup import (
     BACKUP_COUNT,
     LOG_FILENAME,
     LOGGER_NAME,
@@ -150,20 +150,20 @@ def test_numeric_levels_are_accepted(tmp_path: Path) -> None:
 
 def test_logs_dir_follows_xdg_data_home(xdg_dirs: dict[str, Path]) -> None:
     """Logs live beside application data, per the XDG spec."""
-    assert logs_dir() == xdg_dirs["XDG_DATA_HOME"] / "image-swiper" / "logs"
+    assert logs_dir() == xdg_dirs["XDG_DATA_HOME"] / "swipey-photos" / "logs"
 
 
 def test_logs_dir_falls_back_to_local_share(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The documented default is ``~/.local/share/image-swiper/logs``."""
+    """The documented default is ``~/.local/share/swipey-photos/logs``."""
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
 
-    assert logs_dir() == Path.home() / ".local" / "share" / "image-swiper" / "logs"
+    assert logs_dir() == Path.home() / ".local" / "share" / "swipey-photos" / "logs"
 
 
 def test_get_logger_keeps_one_namespace() -> None:
     """Short names are prefixed once, full names are left alone."""
-    assert get_logger("sorter").name == "image_swiper.sorter"
-    assert get_logger("image_swiper.core.sorter").name == "image_swiper.core.sorter"
+    assert get_logger("sorter").name == "swipey_photos.sorter"
+    assert get_logger("swipey_photos.core.sorter").name == "swipey_photos.core.sorter"
     assert get_logger(LOGGER_NAME).name == LOGGER_NAME
 
 

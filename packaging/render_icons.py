@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Regenerate ``packaging/icons`` from :mod:`image_swiper.ui.branding`.
+"""Regenerate ``packaging/icons`` from :mod:`swipey_photos.ui.branding`.
 
 The application paints its brand mark at runtime, but desktop integration needs
-real files: ``packaging/image-swiper.desktop`` points ``Icon=image-swiper`` at
+real files: ``packaging/swipey-photos.desktop`` points ``Icon=swipey-photos`` at
 the icon theme, and AppImage bundlers copy the same tree. This script is the
 bridge — run it after any change to ``branding.py`` and commit the result::
 
@@ -61,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from PyQt6.QtWidgets import QApplication
 
-    from image_swiper.ui.branding import export_icons
+    from swipey_photos.ui.branding import export_icons
 
     # Keep a reference: PyQt drops the application object (and with it the
     # backing store QPixmap needs) as soon as nothing points at it any more.

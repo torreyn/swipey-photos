@@ -3,14 +3,14 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "image-swiper"
+name = "swipey-photos"
 dynamic = ["version"]
 description = "Sort images in a folder with Tinder-style swipe gestures on Linux."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "ImageSwiper contributors" }]
+authors = [{ name = "Swipey Photos contributors" }]
 keywords = ["images", "photos", "sorting", "culling", "pyqt6", "qt", "linux", "desktop"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
@@ -48,19 +48,19 @@ dev = [
 binary = ["pyinstaller>=6.10"]
 
 [project.scripts]
-image-swiper = "image_swiper.__main__:main"
+swipey-photos = "swipey_photos.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/torreyn/image-swiper"
-Documentation = "https://github.com/torreyn/image-swiper/tree/main/docs"
-Issues = "https://github.com/torreyn/image-swiper/issues"
-Source = "https://github.com/torreyn/image-swiper"
+Homepage = "https://github.com/torreyn/swipey-photos"
+Documentation = "https://github.com/torreyn/swipey-photos/tree/main/docs"
+Issues = "https://github.com/torreyn/swipey-photos/issues"
+Source = "https://github.com/torreyn/swipey-photos"
 
 [tool.hatch.version]
-path = "src/image_swiper/__init__.py"
+path = "src/swipey_photos/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/image_swiper"]
+packages = ["src/swipey_photos"]
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -75,7 +75,7 @@ include = [
   "/CONTRIBUTING.md",
   "/CHANGELOG.md",
   "/SECURITY.md",
-  "/image-swiper.spec",
+  "/swipey-photos.spec",
   "/pyproject.toml",
   "/requirements.txt",
 ]
@@ -116,12 +116,12 @@ markers = [
 [tool.mypy]
 python_version = "3.11"
 strict = true
-files = ["src/image_swiper"]
+files = ["src/swipey_photos"]
 warn_unreachable = true
 
 [tool.coverage.run]
 # Measure the package, not the tests; `pip install -e .` keeps the paths stable.
-source = ["image_swiper"]
+source = ["swipey_photos"]
 branch = true
 omit = ["*/tests/*"]
 

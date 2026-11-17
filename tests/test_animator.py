@@ -25,14 +25,14 @@ import pytest
 from PyQt6.QtCore import QParallelAnimationGroup, QPoint, QPropertyAnimation
 from PyQt6.QtWidgets import QWidget
 
-from image_swiper.ui.animator import (
+from swipey_photos.ui.animator import (
     DEFAULT_DURATION_MS,
     FLY_IN,
     MAX_DURATION_MS,
     MIN_DURATION_MS,
     CardAnimator,
 )
-from image_swiper.ui.swipe_card import SwipeCard
+from swipey_photos.ui.swipe_card import SwipeCard
 
 if TYPE_CHECKING:
     from pytestqt.qtbot import QtBot

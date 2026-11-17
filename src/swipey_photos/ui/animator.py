@@ -5,7 +5,7 @@ Responsibility
     when a direction is known, sliding) in after a commit, plus the timing
     policy the whole UI shares. The per-card transitions already live where they
     belong — the card flies itself out on commit and springs itself back when a
-    drag is aborted (see :class:`~image_swiper.ui.swipe_card.SwipeCard`) — so
+    drag is aborted (see :class:`~swipey_photos.ui.swipe_card.SwipeCard`) — so
     ``CardAnimator`` owns only the transitions the stage drives.
 
     It also decides what to do when input arrives mid-animation: the running

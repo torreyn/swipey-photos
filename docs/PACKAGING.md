@@ -1,17 +1,17 @@
 # Packaging and distribution
 
-How ImageSwiper gets from this repository onto a user's desktop, and what each
+How Swipey Photos gets from this repository onto a user's desktop, and what each
 artefact contains. The desktop integration lives in [`packaging/`](../packaging),
 the binary recipe in [`scripts/build.sh`](../scripts/build.sh) plus
-[`image-swiper.spec`](../image-swiper.spec), and all of it is covered by
+[`swipey-photos.spec`](../swipey-photos.spec), and all of it is covered by
 `tests/test_packaging.py`.
 
 | Artefact | Built from | Who uses it |
 | --- | --- | --- |
 | wheel + sdist | `python -m build` | `pip install`, distributions, AppImage |
-| `image-swiper.desktop` | `packaging/` | every menu, dock and task bar |
+| `swipey-photos.desktop` | `packaging/` | every menu, dock and task bar |
 | icon theme tree | `packaging/icons/hicolor/` (generated) | the desktop entry's `Icon=` |
-| one-file binary | `scripts/build.sh` + `image-swiper.spec` | users with Python but no packaging tools |
+| one-file binary | `scripts/build.sh` + `swipey-photos.spec` | users with Python but no packaging tools |
 | AppDir / AppImage | `packaging/appimage/build-appimage.sh` | users without Python **or** Qt libraries |
 | GitHub Release | `.github/workflows/release.yml` | anyone who wants a download instead of a build |
 | Flatpak | not shipped — see [Flatpak](#5-flatpak) | — |
@@ -33,20 +33,20 @@ pip install .                                  # the launcher needs this on PATH
 environment. It writes:
 
 ```text
-~/.local/share/applications/image-swiper.desktop
-~/.local/share/icons/hicolor/16x16/apps/image-swiper.png
-~/.local/share/icons/hicolor/24x24/apps/image-swiper.png
-~/.local/share/icons/hicolor/32x32/apps/image-swiper.png
-~/.local/share/icons/hicolor/48x48/apps/image-swiper.png
-~/.local/share/icons/hicolor/64x64/apps/image-swiper.png
-~/.local/share/icons/hicolor/128x128/apps/image-swiper.png
-~/.local/share/icons/hicolor/256x256/apps/image-swiper.png
-~/.local/share/icons/hicolor/scalable/apps/image-swiper.svg
+~/.local/share/applications/swipey-photos.desktop
+~/.local/share/icons/hicolor/16x16/apps/swipey-photos.png
+~/.local/share/icons/hicolor/24x24/apps/swipey-photos.png
+~/.local/share/icons/hicolor/32x32/apps/swipey-photos.png
+~/.local/share/icons/hicolor/48x48/apps/swipey-photos.png
+~/.local/share/icons/hicolor/64x64/apps/swipey-photos.png
+~/.local/share/icons/hicolor/128x128/apps/swipey-photos.png
+~/.local/share/icons/hicolor/256x256/apps/swipey-photos.png
+~/.local/share/icons/hicolor/scalable/apps/swipey-photos.svg
 ```
 
 The menu entry appears the next time the desktop shell rescans its application
 directories (immediately on most shells; log out and back in otherwise). The app
-shows up as **ImageSwiper → Photo Sorter**.
+shows up as **Swipey Photos → Photo Sorter**.
 
 | Option | Effect |
 | --- | --- |
@@ -80,9 +80,9 @@ task-bar entry:
 
 | Value | Source |
 | --- | --- |
-| desktop file name | `image_swiper.app.DESKTOP_FILE_NAME` → `image-swiper` |
+| desktop file name | `swipey_photos.app.DESKTOP_FILE_NAME` → `swipey-photos` |
 | `StartupWMClass` | the same constant, set with `QApplication.setDesktopFileName` |
-| `Icon=` | `image_swiper.ui.branding.ICON_NAME` → `image-swiper` |
+| `Icon=` | `swipey_photos.ui.branding.ICON_NAME` → `swipey-photos` |
 | installed icon files | `<ICON_NAME>.{svg,png}` |
 
 `tests/test_packaging.py::test_desktop_identity_matches_the_qt_application`
@@ -90,9 +90,9 @@ fails when one of them drifts.
 
 ### Why the entry has no `MimeType` and no `%f`
 
-ImageSwiper sorts a *folder*; it does not open a single image. Registering as an
+Swipey Photos sorts a *folder*; it does not open a single image. Registering as an
 image viewer would pass the launcher a file path the CLI would then reject.
-`Exec=image-swiper` is therefore correct and intentional.
+`Exec=swipey-photos` is therefore correct and intentional.
 
 ### Regenerating the icons
 
@@ -118,18 +118,18 @@ python -m build                                   # dist/*.whl, dist/*.tar.gz
 python -m twine check dist/*                      # if twine is installed
 ```
 
-The wheel installs the package, `py.typed` and the `image-swiper` console script.
+The wheel installs the package, `py.typed` and the `swipey-photos` console script.
 The sdist additionally carries `tests/`, `docs/`, `packaging/`, `scripts/` and
-`image-swiper.spec`, which is what lets a distribution build the desktop entry or
+`swipey-photos.spec`, which is what lets a distribution build the desktop entry or
 a standalone binary from a source tarball alone.
 
 ---
 
 ## 3. Standalone binary (PyInstaller)
 
-`scripts/build.sh` writes `dist/image-swiper`: one executable that runs on a
+`scripts/build.sh` writes `dist/swipey-photos`: one executable that runs on a
 machine without Python. The release workflow uploads it as
-`image-swiper-<version>-linux-x86_64`.
+`swipey-photos-<version>-linux-x86_64`.
 
 ```bash
 ./scripts/build.sh                        # venv + PyInstaller, ~2 minutes cold
@@ -139,14 +139,14 @@ PYTHON=python3.12 ./scripts/build.sh      # pick the interpreter explicitly
 
 | Piece | Where | Note |
 | --- | --- | --- |
-| recipe | [`image-swiper.spec`](../image-swiper.spec) | one file, windowed, `pathex=["src"]`, 256 px icon |
-| launcher | `packaging/pyinstaller/entry.py` | imports `image_swiper.__main__.main`; see below |
-| entry point | `src/image_swiper/__main__.py` | the same module the console script wraps |
+| recipe | [`swipey-photos.spec`](../swipey-photos.spec) | one file, windowed, `pathex=["src"]`, 256 px icon |
+| launcher | `packaging/pyinstaller/entry.py` | imports `swipey_photos.__main__.main`; see below |
+| entry point | `src/swipey_photos/__main__.py` | the same module the console script wraps |
 | build env | `build/venv` | `pip install ".[binary]"`; your shell's venv is untouched |
-| output | `dist/image-swiper` | one file; `du -h` reports about 70 MB |
+| output | `dist/swipey-photos` | one file; `du -h` reports about 70 MB |
 
 The launcher exists because PyInstaller runs the file named in `Analysis` as
-top-level code: pointing it at `src/image_swiper/__main__.py` fails with
+top-level code: pointing it at `src/swipey_photos/__main__.py` fails with
 `attempted relative import with no known parent package`, since that module uses
 `from . import __version__`. Importing the package from a three-line launcher
 keeps the normal `__package__` context, and `tests/test_packaging.py` fails if the
@@ -159,11 +159,11 @@ and friends — the list is in
 [README → Installation](../README.md#1-system-packages-qt-runtime--python-tooling).
 When you cannot install those, build the AppImage in §4 instead.
 
-The script verifies `dist/image-swiper --version` against
-`image_swiper.__version__`. A deeper manual check, on a throwaway folder:
+The script verifies `dist/swipey-photos --version` against
+`swipey_photos.__version__`. A deeper manual check, on a throwaway folder:
 
 ```bash
-QT_QPA_PLATFORM=offscreen dist/image-swiper --dry-run ~/Pictures/to-sort
+QT_QPA_PLATFORM=offscreen dist/swipey-photos --dry-run ~/Pictures/to-sort
 ```
 
 Startup is slower than a `pip install`: the one-file bootloader extracts the
@@ -171,14 +171,14 @@ bundle into a temporary directory on every run, so expect about a second before
 the window appears. The AppImage in §4 trades the same way with a squashfs image.
 
 A hand-written spec is required here: a `pyi-makespec` default run cannot import
-`image_swiper` from a src-layout checkout, because `src/` is not on `sys.path`.
+`swipey_photos` from a src-layout checkout, because `src/` is not on `sys.path`.
 Everything else in the file is the stock one-file recipe, and
 `tests/test_packaging.py` pins its shape (name, no `COLLECT`, windowed, icon
 exists) so an edit cannot silently switch to one-directory output.
 
 Verified on the build machine (Python 3.13, PyInstaller 6.22, ~70 MB):
-`--version` prints `ImageSwiper 1.0.0`, `--help` lists the documented flags, and
-`QT_QPA_PLATFORM=offscreen ./image-swiper --dry-run <copy-of-photos>` starts a
+`--version` prints `Swipey Photos 1.0.0`, `--help` lists the documented flags, and
+`QT_QPA_PLATFORM=offscreen ./swipey-photos --dry-run <copy-of-photos>` starts a
 session, prefetches three previews (so Pillow's JPEG plugin is inside the bundle)
 and leaves every file where it was. PyInstaller logs
 `Ignoring icon; supported only on Windows and macOS!` once — expected on Linux,
@@ -201,17 +201,17 @@ APPIMAGETOOL=/path/to/appimagetool ./packaging/appimage/build-appimage.sh
 | --- | --- |
 | `--python PATH` | interpreter to bundle (default: `$APPIMAGE_PYTHON`, then `uv python find 3.13`) |
 | `--output DIR` | staging directory and artefact location (default: `build/appimage`) |
-| `--staging-only` | build `ImageSwiper.AppDir` and stop before `appimagetool` |
+| `--staging-only` | build `SwipeyPhotos.AppDir` and stop before `appimagetool` |
 | `--appimagetool PATH` | the packaging tool (default: `$APPIMAGETOOL`, then `PATH`) |
 | `-h`, `--help` | usage |
 
 What the script does:
 
-1. Copies the interpreter's prefix into `ImageSwiper.AppDir/usr` and refuses a
+1. Copies the interpreter's prefix into `SwipeyPhotos.AppDir/usr` and refuses a
    distribution Python that links a shared `libpython` — that library would be
    missing on the target machine. python-build-standalone builds (what
    `uv python install` downloads) are relocatable and work.
-2. Installs ImageSwiper and its dependencies into the bundle's `site-packages`
+2. Installs Swipey Photos and its dependencies into the bundle's `site-packages`
    with `uv pip install --target` (falling back to `pip`). On a machine without
    network access pass a wheelhouse:
    `APPIMAGE_PIP_ARGS="--no-index --find-links /path/to/wheels"`.
@@ -220,7 +220,7 @@ What the script does:
    about 390 MB to about 270 MB before squashfs compression.
 4. Writes `AppRun` (runs the bundled interpreter, ignoring any inherited
    `APPDIR`), the desktop entry, `.DirIcon` and the scalable icon.
-5. Runs `appimagetool` and writes `image-swiper-<version>-<arch>.AppImage`.
+5. Runs `appimagetool` and writes `swipey-photos-<version>-<arch>.AppImage`.
 
 `appimagetool` is published separately
 ([AppImage/appimagetool](https://github.com/AppImage/appimagetool/releases)); the
@@ -252,7 +252,7 @@ module, a `python3-PyQt6` module built from pinned wheels, `--share=ipc`,
 `--filesystem=home` (the app sorts user folders in place, so a portal-based
 folder picker would need additional work).
 
-Until then the AppImage is the supported way to run ImageSwiper without a
+Until then the AppImage is the supported way to run Swipey Photos without a
 Python environment.
 
 ---
@@ -280,13 +280,13 @@ The sdist contains everything those steps need, including `packaging/`.
    new version's section; `tests/test_packaging.py` fails until the shipped
    version has one.
 3. `ruff check . && ruff format --check . && mypy && pytest -q`.
-4. `desktop-file-validate packaging/image-swiper.desktop` (run automatically by
+4. `desktop-file-validate packaging/swipey-photos.desktop` (run automatically by
    the suite when the tool is installed).
 5. `./packaging/install-desktop.sh --prefix /usr --destdir /tmp/stage` and check
    the tree; `--uninstall` must remove it again.
 6. `python -m build`, then install the wheel in a throwaway venv and run
-   `image-swiper --version`.
-7. `./scripts/build.sh`, then `dist/image-swiper --version` and one real sorting
+   `swipey-photos --version`.
+7. `./scripts/build.sh`, then `dist/swipey-photos --version` and one real sorting
    session on a scratch folder.
 8. Optional: build the AppImage and start it on a machine without Python.
 9. Tag `vX.Y.Z` and push it — `.github/workflows/release.yml` attaches the

@@ -1,18 +1,18 @@
 [Desktop Entry]
 Type=Application
 Version=1.5
-Name=ImageSwiper
+Name=Swipey Photos
 GenericName=Photo Sorter
 Comment=Sort a folder of photos with a swipe
-Exec=image-swiper
-TryExec=image-swiper
-Icon=image-swiper
+Exec=swipey-photos
+TryExec=swipey-photos
+Icon=swipey-photos
 Terminal=false
 Categories=Graphics;Photography;
 Keywords=photo;photos;image;images;sort;sorting;cull;culling;swipe;organize;
 StartupNotify=true
-StartupWMClass=image-swiper
-# No MimeType and no %f/%U on purpose: ImageSwiper sorts a *folder*, it does not
+StartupWMClass=swipey-photos
+# No MimeType and no %f/%U on purpose: Swipey Photos sorts a *folder*, it does not
 # open a single image. Registering as an image viewer would hand the app a file
 # path it would then reject. The icon name, the desktop-file name and the
-# WM_CLASS all come from one string, image_swiper.app.DESKTOP_FILE_NAME.
+# WM_CLASS all come from one string, swipey_photos.app.DESKTOP_FILE_NAME.

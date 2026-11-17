@@ -10,6 +10,7 @@ Responsibility
 Public API
     APP_DISPLAY_NAME: str       human-readable product name
     TAGLINE: str                one-line explanation under the logo
+    SUPPORT_URL: str            donation page offered by the About box
     ICON_NAME: str              installed icon stem, shared with the .desktop file
     ICON_SIZES: tuple[int,...]  pixel sizes baked into the QIcon
     SVG_SIZE: int               view-box edge of the exported scalable icon
@@ -22,7 +23,7 @@ Behaviour
     * Drawing is pure ``QPainter`` on a transparent pixmap: no image files, no
       fonts from disk, so the look is identical on every machine and the test
       suite can assert that the pixmap is simply not null.
-    * Chevron colours are taken from :data:`image_swiper.ui.swipe_card.CATEGORY_COLORS`
+    * Chevron colours are taken from :data:`swipey_photos.ui.swipe_card.CATEGORY_COLORS`
       so the logo, the drag badge and the footer buttons share one palette.
     * Sizes below 24 px drop the cards and keep only the chevrons, which is what
       stays legible in a window title bar.
@@ -50,13 +51,16 @@ from PyQt6.QtSvg import QSvgGenerator
 
 from .swipe_card import CATEGORY_COLORS
 
-APP_DISPLAY_NAME = "ImageSwiper"
+APP_DISPLAY_NAME = "Swipey Photos"
 """Product name used in window titles, the About box and the icon tooltip."""
 
 TAGLINE = "Sort a folder of photos with a swipe."
 """One-line description shown under the welcome-screen title."""
 
-ICON_NAME = "image-swiper"
+SUPPORT_URL = "https://buymeacoffee.com/2re.me"
+"""Donation page opened by the About box's *Buy me a coffee* button."""
+
+ICON_NAME = "swipey-photos"
 """Stem of the exported icon files; matches the desktop entry's ``Icon=`` key."""
 
 ICON_SIZES: tuple[int, ...] = (16, 24, 32, 48, 64, 128, 256)
@@ -114,12 +118,12 @@ def export_icons(directory: Path | str, *, sizes: Sequence[int] = ICON_SIZES) ->
     """Write the brand mark as a freedesktop icon theme tree.
 
     Desktop integration needs real files: the ``Icon=`` key of
-    ``packaging/image-swiper.desktop`` is resolved through the icon theme, not
+    ``packaging/swipey-photos.desktop`` is resolved through the icon theme, not
     through Qt. The files land exactly where every theme and cache tool expects
     them::
 
-        <directory>/hicolor/scalable/apps/image-swiper.svg
-        <directory>/hicolor/<N>x<N>/apps/image-swiper.png
+        <directory>/hicolor/scalable/apps/swipey-photos.svg
+        <directory>/hicolor/<N>x<N>/apps/swipey-photos.png
 
     Args:
         directory: Root that receives the ``hicolor`` tree, usually

@@ -22,7 +22,7 @@ Behaviour
       so the layout does not jump around between sessions.
     * ``skipped`` reports images that could not be decoded; the line only
       appears when it is greater than zero.
-    * All counts come from :attr:`image_swiper.core.sorter.Sorter.counts`, which
+    * All counts come from :attr:`swipey_photos.core.sorter.Sorter.counts`, which
       counts *this session*, not what happens to be on disk.
 """
 
@@ -160,7 +160,7 @@ class CompletionScreen(QWidget):
 
         Args:
             counts: Images moved per category, as returned by
-                :attr:`image_swiper.core.sorter.Sorter.counts`. Unknown keys are
+                :attr:`swipey_photos.core.sorter.Sorter.counts`. Unknown keys are
                 ignored and missing categories count as zero.
             source_folder: Folder that was sorted, shown under the headline and
                 used by the "Open source folder" button.

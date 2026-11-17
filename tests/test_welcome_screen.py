@@ -22,9 +22,9 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QWidget
 
 from helpers import FakeFileDialog
-from image_swiper.ui.branding import APP_DISPLAY_NAME, TAGLINE
-from image_swiper.ui.welcome_screen import WelcomeScreen
-from image_swiper.utils.config import MAX_RECENT_FOLDERS
+from swipey_photos.ui.branding import APP_DISPLAY_NAME, TAGLINE
+from swipey_photos.ui.welcome_screen import WelcomeScreen
+from swipey_photos.utils.config import MAX_RECENT_FOLDERS
 
 if TYPE_CHECKING:
     from pytestqt.qtbot import QtBot

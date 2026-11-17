@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from image_swiper.core.image_loader import (
+from swipey_photos.core.image_loader import (
     SUPPORTED_EXTENSIONS,
     ImageLoader,
     ImageLoaderError,

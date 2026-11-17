@@ -11,7 +11,9 @@ Coverage
       keeps the image queued, a vanished image is dropped with a warning;
     * the live progress label and the status-bar counters;
     * the shortcut surface: rescan (F5/Ctrl+R), full screen (F11), the F1/`?`
-      reference overlay, and that every bound key is documented in it.
+      reference overlay, and that every bound key is documented in it;
+    * the About box: product name, version, and the *Buy me a coffee* button that
+      hands ``SUPPORT_URL`` to the desktop service.
 
 Conventions
     * The window is always built with an explicit ``config_path`` under
@@ -30,16 +32,19 @@ from typing import TYPE_CHECKING
 
 import pytest
 from PIL import Image
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QLabel, QWidget
 
 from helpers import FakeFileDialog
-from image_swiper.core.folder_manager import CATEGORIES
-from image_swiper.core.sorter import Sorter
-from image_swiper.ui.main_window import MainWindow, default_sorter_factory, qimage_from_pil
-from image_swiper.utils.config import Config, WindowConfig, load_config
-from image_swiper.utils.file_ops import FileOperationError
+from swipey_photos import __version__
+from swipey_photos.core.folder_manager import CATEGORIES
+from swipey_photos.core.sorter import Sorter
+from swipey_photos.ui import main_window as main_window_module
+from swipey_photos.ui.branding import APP_DISPLAY_NAME, SUPPORT_URL
+from swipey_photos.ui.main_window import MainWindow, default_sorter_factory, qimage_from_pil
+from swipey_photos.utils.config import Config, WindowConfig, load_config
+from swipey_photos.utils.file_ops import FileOperationError
 
 if TYPE_CHECKING:
     from pytestqt.qtbot import QtBot
@@ -810,6 +815,55 @@ def test_quit_is_bound_on_linux(window: Callable[..., MainWindow]) -> None:
 
     assert quit_action is not None
     assert [sequence.toString() for sequence in quit_action.shortcuts()] == ["Ctrl+Q"]
+
+
+def test_about_box_names_the_app_version_and_support_button(
+    window: Callable[..., MainWindow],
+) -> None:
+    """The About box names the product, the version and the coffee button."""
+    created = window()
+
+    box, coffee = created._build_about_box()
+
+    assert box.objectName() == "about_box"
+    assert box.windowTitle() == f"About {APP_DISPLAY_NAME}"
+    assert APP_DISPLAY_NAME in box.text()
+    assert __version__ in box.text()
+    assert coffee.text() == "Buy me a coffee"
+    assert coffee.objectName() == "button_buy_me_a_coffee"
+    assert SUPPORT_URL in coffee.toolTip()
+
+
+def test_coffee_button_opens_the_support_page(
+    window: Callable[..., MainWindow], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Clicking the button hands the donation URL to the desktop service."""
+    opened: list[QUrl] = []
+
+    # Stands in for QDesktopServices so the test never launches a browser.
+    class RecordingDesktopServices:
+        @staticmethod
+        def openUrl(url: QUrl) -> bool:
+            opened.append(url)
+            return True
+
+    monkeypatch.setattr(main_window_module, "QDesktopServices", RecordingDesktopServices)
+    created = window()
+
+    _box, coffee = created._build_about_box()
+    coffee.click()
+
+    assert [url.toString() for url in opened] == [SUPPORT_URL]
+
+
+def test_about_action_sits_in_the_help_menu(window: Callable[..., MainWindow]) -> None:
+    """*Help → About* exists and names the app rather than the action."""
+    created = window()
+
+    action = created.findChild(QAction, "action_about")
+
+    assert action is not None
+    assert APP_DISPLAY_NAME in action.text()
 
 
 def test_shortcut_help_reuses_one_overlay(qtbot: QtBot, window: Callable[..., MainWindow]) -> None:

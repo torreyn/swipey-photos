@@ -1,19 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller recipe for the single-file ImageSwiper executable.
+"""PyInstaller recipe for the single-file Swipey Photos executable.
 
 Build it with ``./scripts/build.sh``, or by hand from an environment that has the
 project and PyInstaller installed:
 
     pip install ".[binary]"
-    pyinstaller --clean --noconfirm image-swiper.spec
+    pyinstaller --clean --noconfirm swipey-photos.spec
 
-The result is ``dist/image-swiper``: one file carrying CPython, PyQt6 and Pillow,
+The result is ``dist/swipey-photos``: one file carrying CPython, PyQt6 and Pillow,
 so the target machine needs no Python. It still needs the Qt platform libraries
 (``libxcb-cursor0``, ``libegl1``, …) listed in the README — a bundled Qt cannot
 ship glibc or the X11 client libraries it links against.
 
 Why a spec file instead of command-line flags: the frozen app must import
-``image_swiper`` from ``src/``, which a plain ``pyinstaller src/...`` run cannot
+``swipey_photos`` from ``src/``, which a plain ``pyinstaller src/...`` run cannot
 resolve without ``--paths``. Keeping the recipe next to the source means CI,
 ``scripts/build.sh`` and a packager all get the same binary.
 """
@@ -22,12 +22,12 @@ from pathlib import Path
 
 ROOT = Path(SPECPATH).resolve()  # noqa: F821  # SPECPATH is injected by PyInstaller
 SRC = ROOT / "src"
-ICON = ROOT / "packaging" / "icons" / "hicolor" / "256x256" / "apps" / "image-swiper.png"
+ICON = ROOT / "packaging" / "icons" / "hicolor" / "256x256" / "apps" / "swipey-photos.png"
 
 # ``packaging/pyinstaller/entry.py`` delegates to the same ``main()`` the console
 # script wraps, so the frozen binary accepts exactly the documented CLI
 # (``--version``, ``--dry-run``, …). It cannot point at
-# ``src/image_swiper/__main__.py`` directly: PyInstaller runs that file as
+# ``src/swipey_photos/__main__.py`` directly: PyInstaller runs that file as
 # top-level code, which breaks its relative imports.
 a = Analysis(
     [str(ROOT / "packaging" / "pyinstaller" / "entry.py")],
@@ -54,7 +54,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="image-swiper",
+    name="swipey-photos",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

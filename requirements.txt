@@ -1,4 +1,4 @@
-# ImageSwiper runtime requirements.
+# Swipey Photos runtime requirements.
 #
 # These pins intentionally mirror the `[project].dependencies` table in
 # pyproject.toml, which is the single source of truth for packaging.

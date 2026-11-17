@@ -1,6 +1,6 @@
 # Development guide
 
-Everything needed to hack on ImageSwiper: environment setup, commands, test
+Everything needed to hack on Swipey Photos: environment setup, commands, test
 strategy, debugging Qt on Linux, and the release checklist.
 
 ## 1. Toolchain
@@ -27,8 +27,8 @@ Missing `libxcb-cursor0` produces the classic
 ## 2. First-run setup
 
 ```bash
-git clone https://github.com/torreyn/image-swiper.git
-cd image-swiper
+git clone https://github.com/torreyn/swipey-photos.git
+cd swipey-photos
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
@@ -38,7 +38,7 @@ pip install -e ".[dev]"
 Verify:
 
 ```bash
-python -c "import image_swiper, PyQt6, PIL; print(image_swiper.__version__)"
+python -c "import swipey_photos, PyQt6, PIL; print(swipey_photos.__version__)"
 pytest -q
 ruff check .
 mypy
@@ -60,9 +60,9 @@ Both routes produce an identical `.venv/`; only the installer differs.
 
 | Task | Command |
 | --- | --- |
-| Run from source | `python -m image_swiper` |
-| Run the installed script | `image-swiper` |
-| Run with a folder | `image-swiper ~/Pictures/unsorted` |
+| Run from source | `python -m swipey_photos` |
+| Run the installed script | `swipey-photos` |
+| Run with a folder | `swipey-photos ~/Pictures/unsorted` |
 | Unit tests | `pytest -q` |
 | GUI tests (no display) | `QT_QPA_PLATFORM=offscreen pytest -q -m gui` |
 | All tests, verbose | `pytest -vv` |
@@ -72,9 +72,9 @@ Both routes produce an identical `.venv/`; only the installer differs.
 | Types | `mypy` |
 | Build artefacts | `python -m build` |
 | Inspect the wheel | `python -m zipfile -l dist/*.whl` |
-| Coverage | `pytest -q --cov=image_swiper --cov-report=term-missing` |
-| Coverage report for a reviewer | `pytest -q --cov=image_swiper --cov-report=html && xdg-open htmlcov/index.html` |
-| Standalone binary | `./scripts/build.sh` → `dist/image-swiper` (network, ~2 min) |
+| Coverage | `pytest -q --cov=swipey_photos --cov-report=term-missing` |
+| Coverage report for a reviewer | `pytest -q --cov=swipey_photos --cov-report=html && xdg-open htmlcov/index.html` |
+| Standalone binary | `./scripts/build.sh` → `dist/swipey-photos` (network, ~2 min) |
 | GUI tests on a real X plugin | `xvfb-run -a pytest -q -m gui` |
 
 `pytest` is configured in `pyproject.toml` with `pythonpath = ["src"]`, so tests
@@ -133,24 +133,24 @@ Principles:
 
 ```bash
 # Why won't the window appear?
-QT_DEBUG_PLUGINS=1 python -m image_swiper 2>&1 | head -40
+QT_DEBUG_PLUGINS=1 python -m swipey_photos 2>&1 | head -40
 
 # Verbose Qt internal logging
-QT_LOGGING_RULES="qt.qpa.*=true" python -m image_swiper
+QT_LOGGING_RULES="qt.qpa.*=true" python -m swipey_photos
 
 # Force a specific platform plugin
-QT_QPA_PLATFORM=xcb python -m image_swiper
-QT_QPA_PLATFORM=wayland python -m image_swiper
+QT_QPA_PLATFORM=xcb python -m swipey_photos
+QT_QPA_PLATFORM=wayland python -m swipey_photos
 
 # Headless (CI, containers, SSH)
-QT_QPA_PLATFORM=offscreen python -m image_swiper
+QT_QPA_PLATFORM=offscreen python -m swipey_photos
 ```
 
 Other tips:
 
-- Run `image-swiper --log-level DEBUG` (once M1 lands) and tail
-  `~/.local/share/image-swiper/logs/image-swiper.log`.
-- `strace -f -e trace=rename,openat image-swiper` is the fastest way to see what
+- Run `swipey-photos --log-level DEBUG` (once M1 lands) and tail
+  `~/.local/share/swipey-photos/logs/swipey-photos.log`.
+- `strace -f -e trace=rename,openat swipey-photos` is the fastest way to see what
   is actually touching the filesystem.
 - If the UI freezes, the cause is almost always blocking I/O on the GUI thread;
   check that new core calls go through `ui/workers.py`.
@@ -189,17 +189,17 @@ directory, permission denied, and source == destination.
 
 ```bash
 python -m build                 # sdist + wheel into dist/
-python -m zipfile -l dist/image_swiper-1.0.0-py3-none-any.whl
+python -m zipfile -l dist/swipey_photos-1.0.0-py3-none-any.whl
 
 # Verify a clean install in a throwaway venv
 python3 -m venv /tmp/is-verify
 /tmp/is-verify/bin/pip install dist/*.whl
-/tmp/is-verify/bin/python -c "import image_swiper; print(image_swiper.__version__)"
-/tmp/is-verify/bin/image-swiper --help
+/tmp/is-verify/bin/python -c "import swipey_photos; print(swipey_photos.__version__)"
+/tmp/is-verify/bin/swipey-photos --help
 ```
 
-The wheel must contain `image_swiper/py.typed` and all subpackages. The version
-is read from `src/image_swiper/__init__.py` via Hatch, so bumping it in one
+The wheel must contain `swipey_photos/py.typed` and all subpackages. The version
+is read from `src/swipey_photos/__init__.py` via Hatch, so bumping it in one
 place is enough (do not also edit `pyproject.toml`).
 
 The sdist also carries `packaging/`, which is where the desktop entry, the icon
@@ -216,29 +216,29 @@ QT_QPA_PLATFORM=offscreen python packaging/render_icons.py          # after bran
 ### Standalone binary
 
 `scripts/build.sh` creates `build/venv`, installs the project with the `binary`
-extra and runs PyInstaller against `image-swiper.spec`:
+extra and runs PyInstaller against `swipey-photos.spec`:
 
 ```bash
-./scripts/build.sh                 # -> dist/image-swiper
+./scripts/build.sh                 # -> dist/swipey-photos
 ./scripts/build.sh --clean         # throw the venv away and rebuild it
 ./scripts/build.sh --help          # --venv, --output, --clean, PIP_ARGS
 ```
 
 The spec is a one-file, windowed build of `packaging/pyinstaller/entry.py` (which
-imports `image_swiper.__main__.main` — PyInstaller runs its entry file as
+imports `swipey_photos.__main__.main` — PyInstaller runs its entry file as
 top-level code, so `__main__.py`'s relative imports would fail there) with
-`pathex=["src"]`, so the frozen app resolves `image_swiper` exactly like the
+`pathex=["src"]`, so the frozen app resolves `swipey_photos` exactly like the
 console script does. `tkinter` is the only exclusion — a missing hidden import
 only surfaces at run time, and a few MB are not worth that risk.
 `tests/test_packaging.py` pins the shape of the spec (name, one file, windowed,
 existing icon), so a careless edit fails `pytest` instead of the release job.
 
-The script ends with `dist/image-swiper --version` and compares it with
-`image_swiper.__version__`. For a deeper check, run the binary offscreen against
+The script ends with `dist/swipey-photos --version` and compares it with
+`swipey_photos.__version__`. For a deeper check, run the binary offscreen against
 a throwaway folder and quit with <kbd>Ctrl</kbd>+<kbd>Q</kbd>:
 
 ```bash
-QT_QPA_PLATFORM=offscreen dist/image-swiper --dry-run /tmp/photos-to-sort
+QT_QPA_PLATFORM=offscreen dist/swipey-photos --dry-run /tmp/photos-to-sort
 ```
 
 The result is **not static**: it carries CPython, PyQt6 and Pillow, but Qt still
@@ -264,22 +264,22 @@ twine check dist/*
 ## 8. Release checklist
 
 1. `git switch -c release/x.y.z`
-2. Bump `__version__` in `src/image_swiper/__init__.py`.
+2. Bump `__version__` in `src/swipey_photos/__init__.py`.
 3. Move the `[Unreleased]` entries in [`CHANGELOG.md`](../CHANGELOG.md) into a new
    `## [x.y.z] - YYYY-MM-DD` section and add the compare link at the bottom —
    `tests/test_packaging.py` fails when the shipped version has no section.
 4. Update the README roadmap and any changed docs (`CONFIGURATION.md` keys).
 5. Regenerate the icons if `ui/branding.py` changed (§7) and rerun
-   `desktop-file-validate packaging/image-swiper.desktop`.
+   `desktop-file-validate packaging/swipey-photos.desktop`.
 6. `ruff check . && ruff format --check . && mypy && pytest -q`
 7. `python -m build` and verify the wheel in a clean venv (see §7).
-8. `./scripts/build.sh` and smoke-test `dist/image-swiper --version`.
+8. `./scripts/build.sh` and smoke-test `dist/swipey-photos --version`.
 9. Smoke-test on X11 **and** Wayland, with at least one real photo folder.
 10. Install the desktop entry and check the menu icon, then `--uninstall`.
 11. Tag `vX.Y.Z` and push the tag: `.github/workflows/release.yml` builds the
     binary, the wheel and the sdist, and attaches them to the GitHub Release.
-    Check the release page — the assets should be `image-swiper-X.Y.Z-linux-x86_64`,
-    `image_swiper-X.Y.Z-py3-none-any.whl` and `image_swiper-X.Y.Z.tar.gz`.
+    Check the release page — the assets should be `swipey-photos-X.Y.Z-linux-x86_64`,
+    `swipey_photos-X.Y.Z-py3-none-any.whl` and `swipey_photos-X.Y.Z.tar.gz`.
     (If a runner dies mid-release, re-run the workflow with *Run workflow* and
     the tag as input instead of re-tagging.)
 12. Announce changes; keep the previous minor's config schema readable.
@@ -294,7 +294,7 @@ twine check dist/*
 2. `ruff format --check .` — this is the project's `black`; a second formatter
    would make the two disagree on parenthesized asserts
 3. `mypy` — no arguments; `[tool.mypy]` already pins `files` and `strict`
-4. `pytest -q --cov=image_swiper --cov-report=term-missing --cov-report=xml`
+4. `pytest -q --cov=swipey_photos --cov-report=term-missing --cov-report=xml`
    with `QT_QPA_PLATFORM=offscreen`; the XML is uploaded as the `coverage-xml`
    artefact from the 3.13 leg. Coverage is reported, not enforced, so a PR that
    adds branches without tests shows up in review instead of blocking the build.
@@ -320,9 +320,9 @@ Python version, add that version to `requires-python`, the classifiers and the
 matrix together.
 
 The packaging tests live inside the same `pytest` run: they parse
-`packaging/image-swiper.desktop`, compare the icon tree with
+`packaging/swipey-photos.desktop`, compare the icon tree with
 `ui/branding.ICON_SIZES`, run the install and build scripts against `tmp_path`,
-`sh -n` the scripts, check the shape of `image-swiper.spec`, parse both workflow
+`sh -n` the scripts, check the shape of `swipey-photos.spec`, parse both workflow
 files with PyYAML and pin the changelog format. `desktop-file-validate` runs when
 the runner provides it (it is part of `desktop-file-utils`, which the Ubuntu
 image already has). The AppImage build itself is *not* in CI — it needs a
@@ -330,13 +330,13 @@ relocatable CPython plus the network — so it is verified by hand before a
 release (§8); the PyInstaller binary *is* built, in the release workflow only.
 
 A third job, `package`, builds the sdist and wheel once (Python 3.13), asserts
-that the sdist contains `packaging/image-swiper.desktop` and the scalable icon,
+that the sdist contains `packaging/swipey-photos.desktop` and the scalable icon,
 installs the wheel into a clean virtual environment and runs
-`image-swiper --version`, then uploads `dist/*` as a build artefact.
+`swipey-photos --version`, then uploads `dist/*` as a build artefact.
 
 `.github/workflows/release.yml` is separate because it costs real time and only
 runs on a `v*` tag (or by hand with *Run workflow*). It builds the one-file
-binary with the same `image-swiper.spec` that `scripts/build.sh` uses, smoke-tests
+binary with the same `swipey-photos.spec` that `scripts/build.sh` uses, smoke-tests
 `--version` and `--help`, runs `python -m build` plus `twine check`, and attaches
 the three assets to the GitHub Release with `generate_release_notes`. The AppImage
 is deliberately not part of it: `appimagetool` and a python-build-standalone
@@ -367,7 +367,7 @@ Recommended extensions: `ms-python.python`, `charliermarsh.ruff`,
 
 | Symptom | Fix |
 | --- | --- |
-| `ModuleNotFoundError: image_swiper` | run `pip install -e .` from the repo root, or use `pythonpath = ["src"]` (already set for pytest) |
+| `ModuleNotFoundError: swipey_photos` | run `pip install -e .` from the repo root, or use `pythonpath = ["src"]` (already set for pytest) |
 | Tests collect nothing | `testpaths` points at `tests/`; run from the repo root |
 | `qt.qpa.plugin: Could not load ... "xcb"` | install `libxcb-cursor0` and friends (README) |
 | GUI tests fail on a headless box | `QT_QPA_PLATFORM=offscreen` |
@@ -375,4 +375,4 @@ Recommended extensions: `ms-python.python`, `charliermarsh.ruff`,
 | `pip install -e .` rebuilds constantly | editable installs with Hatch are cheap; if it is slow, check for a network-mounted venv |
 | mypy complains about Qt stubs | ensure `PyQt6-stubs` is *not* installed alongside PyQt6, which ships its own stubs |
 | `scripts/build.sh` aborts: `could not create a venv` | the interpreter lacks `ensurepip`; install `python3.12-venv` or point `PYTHON=` at one that has it |
-| `dist/image-swiper` starts, then `Could not load the Qt platform plugin "xcb"` | the binary bundles Qt but not the X11 client libraries — install the README system packages, or build the AppImage |
+| `dist/swipey-photos` starts, then `Could not load the Qt platform plugin "xcb"` | the binary bundles Qt but not the X11 client libraries — install the README system packages, or build the AppImage |

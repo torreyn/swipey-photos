@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from image_swiper.utils import file_ops
-from image_swiper.utils.file_ops import (
+from swipey_photos.utils import file_ops
+from swipey_photos.utils.file_ops import (
     DestinationUnwritableError,
     FileOperationError,
     SameFileError,

@@ -62,7 +62,7 @@ jobs:
       - name: Test with coverage
         env:
           QT_QPA_PLATFORM: offscreen
-        run: pytest -q --cov=image_swiper --cov-report=term-missing --cov-report=xml
+        run: pytest -q --cov=swipey_photos --cov-report=term-missing --cov-report=xml
 
       - name: Upload the coverage report
         if: matrix.python-version == '3.13'
@@ -124,22 +124,22 @@ jobs:
       - name: Check the artefacts
         run: |
           python -m zipfile -l dist/*.whl
-          tar -tzf dist/*.tar.gz | grep -q '^image_swiper-[^/]*/packaging/image-swiper.desktop$'
-          tar -tzf dist/*.tar.gz | grep -q '^image_swiper-[^/]*/packaging/icons/hicolor/scalable/apps/image-swiper.svg$'
+          tar -tzf dist/*.tar.gz | grep -q '^swipey_photos-[^/]*/packaging/swipey-photos.desktop$'
+          tar -tzf dist/*.tar.gz | grep -q '^swipey_photos-[^/]*/packaging/icons/hicolor/scalable/apps/swipey-photos.svg$'
           # The binary recipe must travel with the sources; scripts/build.sh is
           # useless without the spec it points at.
-          tar -tzf dist/*.tar.gz | grep -q '^image_swiper-[^/]*/image-swiper.spec$'
-          tar -tzf dist/*.tar.gz | grep -q '^image_swiper-[^/]*/scripts/build.sh$'
+          tar -tzf dist/*.tar.gz | grep -q '^swipey_photos-[^/]*/swipey-photos.spec$'
+          tar -tzf dist/*.tar.gz | grep -q '^swipey_photos-[^/]*/scripts/build.sh$'
 
       - name: Install the wheel in a clean environment
         run: |
           python -m venv /tmp/verify
           /tmp/verify/bin/pip install dist/*.whl
-          /tmp/verify/bin/image-swiper --version
-          /tmp/verify/bin/image-swiper --help
+          /tmp/verify/bin/swipey-photos --version
+          /tmp/verify/bin/swipey-photos --help
 
       - uses: actions/upload-artifact@v4
         with:
-          name: image-swiper-dist
+          name: swipey-photos-dist
           path: dist/*
           if-no-files-found: error

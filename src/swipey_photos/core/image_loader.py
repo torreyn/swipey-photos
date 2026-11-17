@@ -19,7 +19,7 @@ Public API
 
 Behaviour
     * Scanning is non-recursive, so the Good/Bad/Great/OK folders created by
-      :class:`~image_swiper.core.folder_manager.FolderManager` never reappear
+      :class:`~swipey_photos.core.folder_manager.FolderManager` never reappear
       in the queue.
     * Order is alphabetical but numeric-aware: ``IMG_2`` sorts before
       ``IMG_10`` and ``photo.jpg`` before ``photo_1.jpg``.

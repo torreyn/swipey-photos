@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="1200" height="760" role="img" aria-labelledby="title desc">
-  <title id="title">ImageSwiper main window — placeholder mock-up</title>
-  <desc id="desc">Mock-up of the ImageSwiper window: a photo card in the centre with BAD, GOOD, GREAT and OK badges around it, a progress header and a keyboard hint bar.</desc>
+  <title id="title">Swipey Photos main window — placeholder mock-up</title>
+  <desc id="desc">Mock-up of the Swipey Photos window: a photo card in the centre with BAD, GOOD, GREAT and OK badges around it, a progress header and a keyboard hint bar.</desc>
 
   <defs>
     <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
@@ -26,7 +26,7 @@
   <circle cx="88" cy="63" r="6" fill="#ff5f57"/>
   <circle cx="110" cy="63" r="6" fill="#febc2e"/>
   <circle cx="132" cy="63" r="6" fill="#28c840"/>
-  <text x="170" y="69" font-family="sans-serif" font-size="15" fill="#9aa4b2">ImageSwiper — ~/Pictures/unsorted</text>
+  <text x="170" y="69" font-family="sans-serif" font-size="15" fill="#9aa4b2">Swipey Photos — ~/Pictures/unsorted</text>
 
   <!-- header -->
   <text x="100" y="122" font-family="sans-serif" font-size="15" fill="#c8d0da">Sorting 12 of 340</text>

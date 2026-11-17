@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from image_swiper.core.folder_manager import CategoryError, FolderManager, SourceFolderError
-from image_swiper.core.image_loader import ImageLoader
-from image_swiper.core.sorter import (
+from swipey_photos.core.folder_manager import CategoryError, FolderManager, SourceFolderError
+from swipey_photos.core.image_loader import ImageLoader
+from swipey_photos.core.sorter import (
     MissingImageError,
     MoveRecord,
     NoCurrentImageError,
@@ -370,7 +370,7 @@ def test_dry_run_logs_the_move_without_touching_the_file(
     sorter = Sorter(sample_folder, dry_run=True)
     source = sample_folder / "IMG_1.jpg"
 
-    with caplog.at_level("INFO", logger="image_swiper"):
+    with caplog.at_level("INFO", logger="swipey_photos"):
         record = sorter.categorize("Good")
 
     assert sorter.dry_run is True
@@ -390,7 +390,7 @@ def test_dry_run_undo_restores_the_queue_without_a_file_move(
     sorter = Sorter(sample_folder, dry_run=True)
     sorter.categorize("Bad")
 
-    with caplog.at_level("INFO", logger="image_swiper"):
+    with caplog.at_level("INFO", logger="swipey_photos"):
         record = sorter.undo()
 
     assert record is not None

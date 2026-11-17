@@ -60,20 +60,20 @@ jobs:
       # Same recipe as scripts/build.sh, so a local build and the released
       # binary cannot drift apart.
       - name: Build the one-file executable
-        run: pyinstaller --clean --noconfirm --distpath dist image-swiper.spec
+        run: pyinstaller --clean --noconfirm --distpath dist swipey-photos.spec
 
       - name: Smoke-test the binary
         run: |
-          ./dist/image-swiper --version
-          ./dist/image-swiper --help > /dev/null
+          ./dist/swipey-photos --version
+          ./dist/swipey-photos --help > /dev/null
 
       - name: Name the asset after the tag
-        run: mv dist/image-swiper "dist/image-swiper-${TAG}-linux-x86_64"
+        run: mv dist/swipey-photos "dist/swipey-photos-${TAG}-linux-x86_64"
 
       - uses: actions/upload-artifact@v4
         with:
           name: binary
-          path: dist/image-swiper-*
+          path: dist/swipey-photos-*
           if-no-files-found: error
 
   dist:

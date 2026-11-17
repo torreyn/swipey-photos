@@ -34,16 +34,16 @@ from PyQt6.QtCore import QSize
 from PyQt6.QtGui import QImage, QPainter
 from PyQt6.QtSvg import QSvgRenderer
 
-from image_swiper import app
-from image_swiper.ui import branding, swipe_card
+from swipey_photos import app
+from swipey_photos.ui import branding, swipe_card
 
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGING = ROOT / "packaging"
-DESKTOP_FILE = PACKAGING / "image-swiper.desktop"
+DESKTOP_FILE = PACKAGING / "swipey-photos.desktop"
 ICON_TREE = PACKAGING / "icons" / "hicolor"
 INSTALLER = PACKAGING / "install-desktop.sh"
 BUILDER = PACKAGING / "appimage" / "build-appimage.sh"
-SPEC_FILE = ROOT / "image-swiper.spec"
+SPEC_FILE = ROOT / "swipey-photos.spec"
 BUILD_SCRIPT = ROOT / "scripts" / "build.sh"
 WORKFLOWS = ROOT / ".github" / "workflows"
 CHANGELOG = ROOT / "CHANGELOG.md"
@@ -116,7 +116,7 @@ def test_desktop_entry_launches_the_packaged_console_script() -> None:
     assert executable in scripts
 
     # A %f/%U field code would hand the app a single *file*, which it does not
-    # accept: ImageSwiper sorts folders.
+    # accept: Swipey Photos sorts folders.
     assert "%" not in entry["Exec"]
     assert "MimeType" not in entry
 
@@ -218,7 +218,7 @@ def test_installer_installs_and_removes_the_desktop_files(tmp_path: Path) -> Non
     )
     assert install.returncode == 0, install.stderr
 
-    entry = stage / "usr" / "share" / "applications" / "image-swiper.desktop"
+    entry = stage / "usr" / "share" / "applications" / "swipey-photos.desktop"
     assert entry.read_text(encoding="utf-8") == DESKTOP_FILE.read_text(encoding="utf-8")
     icons = sorted((stage / "usr" / "share" / "icons" / "hicolor").glob("*x*/apps/*.png"))
     assert len(icons) == len(branding.ICON_SIZES)
@@ -249,8 +249,8 @@ def test_installer_defaults_to_xdg_data_home(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert (data_home / "applications" / "image-swiper.desktop").is_file()
-    assert (data_home / "icons" / "hicolor" / "256x256" / "apps" / "image-swiper.png").is_file()
+    assert (data_home / "applications" / "swipey-photos.desktop").is_file()
+    assert (data_home / "icons" / "hicolor" / "256x256" / "apps" / "swipey-photos.png").is_file()
 
 
 @pytest.mark.parametrize("script", [INSTALLER, BUILDER, BUILD_SCRIPT])
@@ -299,7 +299,7 @@ def test_sdist_ships_the_packaging_directory() -> None:
     assert "/packaging" in include
     # Same reasoning for the binary recipe: a maintainer must be able to unpack
     # the sdist, run scripts/build.sh and get the released executable.
-    assert "/image-swiper.spec" in include
+    assert "/swipey-photos.spec" in include
     assert "/scripts" in include
     assert "/CHANGELOG.md" in include
 
@@ -308,11 +308,11 @@ def test_pyinstaller_spec_freezes_a_one_file_windowed_binary() -> None:
     """One file, not a directory, started from the console-script entry point."""
     spec = SPEC_FILE.read_text(encoding="utf-8")
 
-    assert 'name="image-swiper"' in spec
+    assert 'name="swipey-photos"' in spec
     assert "console=False" in spec
     collect_calls = [line for line in spec.splitlines() if line.lstrip().startswith("COLLECT(")]
     assert not collect_calls, "COLLECT() would produce a directory instead of one file"
-    # The launcher, not src/image_swiper/__main__.py: PyInstaller runs the entry
+    # The launcher, not src/swipey_photos/__main__.py: PyInstaller runs the entry
     # script as top-level code, which breaks __main__.py's relative imports.
     assert '"entry.py"' in spec
     assert "pathex=[str(SRC)]" in spec, "src/ has to be importable during the analysis"
@@ -320,10 +320,10 @@ def test_pyinstaller_spec_freezes_a_one_file_windowed_binary() -> None:
 
 
 def test_pyinstaller_launcher_delegates_to_the_console_entry_point() -> None:
-    """The frozen binary must behave exactly like the ``image-swiper`` script."""
+    """The frozen binary must behave exactly like the ``swipey-photos`` script."""
     launcher = (PACKAGING / "pyinstaller" / "entry.py").read_text(encoding="utf-8")
 
-    assert "from image_swiper.__main__ import main" in launcher
+    assert "from swipey_photos.__main__ import main" in launcher
     assert "SystemExit(main())" in launcher
 
 
@@ -350,7 +350,7 @@ def test_build_script_is_executable_and_documents_its_contract() -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert "dist/image-swiper" in result.stdout
+    assert "dist/swipey-photos" in result.stdout
     assert "PIP_ARGS" in result.stdout
 
 
@@ -364,7 +364,7 @@ def test_ci_workflow_runs_the_documented_checks() -> None:
     assert "ruff check ." in runs
     assert "ruff format --check ." in runs
     assert "mypy" in runs
-    assert "--cov=image_swiper" in runs
+    assert "--cov=swipey_photos" in runs
     # PyQt6 needs the xcb libraries before the first import, not just in the
     # GUI leg, because the unit tests import Qt too.
     assert "libxkbcommon-x11-0" in runs
@@ -393,7 +393,7 @@ def test_release_workflow_attaches_the_binary_to_a_tagged_release() -> None:
     assert release["permissions"]["contents"] == "read", "only the publish job may write"
 
     binary_runs = _job_runs(release, "binary")
-    assert "image-swiper.spec" in binary_runs
+    assert "swipey-photos.spec" in binary_runs
     assert "--version" in binary_runs, "the binary is smoke-tested before it is uploaded"
 
     assert "softprops/action-gh-release" in _job_runs(release, "publish")
@@ -406,7 +406,7 @@ def test_release_workflow_attaches_the_binary_to_a_tagged_release() -> None:
 
 def test_changelog_follows_keep_a_changelog() -> None:
     """The changelog opens with Unreleased and already knows the shipped version."""
-    from image_swiper import __version__
+    from swipey_photos import __version__
 
     changelog = CHANGELOG.read_text(encoding="utf-8")
 

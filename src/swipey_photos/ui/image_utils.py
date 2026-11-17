@@ -14,7 +14,7 @@ Public API
 Threading
     ``qimage_from_pil`` is safe to call from a worker thread: ``QImage`` is a
     value type and is not tied to the GUI thread, which is exactly what
-    :class:`~image_swiper.ui.workers.PreviewPrefetcher` relies on. ``QPixmap``
+    :class:`~swipey_photos.ui.workers.PreviewPrefetcher` relies on. ``QPixmap``
     is not, so ``pixmap_from_pil`` must run on the GUI thread.
 """
 

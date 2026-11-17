@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install the ImageSwiper desktop entry and icon set for the current user.
+# Install the Swipey Photos desktop entry and icon set for the current user.
 #
 #   ./packaging/install-desktop.sh                    # ~/.local (or $XDG_DATA_HOME)
 #   sudo ./packaging/install-desktop.sh --prefix /usr # system-wide
@@ -7,7 +7,7 @@
 #
 # Everything is copied from this directory, so the script works from a source
 # checkout or from the unpacked sdist. It never touches the Python environment:
-# the desktop entry launches the `image-swiper` console script, so install the
+# the desktop entry launches the `swipey-photos` console script, so install the
 # package first (`pip install .` in the checkout).
 #
 # Packagers staging a package build pass --destdir; cache updates are skipped in
@@ -15,7 +15,7 @@
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
-DATA_FILE="$SCRIPT_DIR/image-swiper.desktop"
+DATA_FILE="$SCRIPT_DIR/swipey-photos.desktop"
 ICONS_SRC="$SCRIPT_DIR/icons"
 
 PREFIX=$HOME/.local
@@ -28,7 +28,7 @@ usage() {
     cat <<'EOF'
 Usage: install-desktop.sh [options]
 
-Install (or remove) the ImageSwiper desktop entry and icons.
+Install (or remove) the Swipey Photos desktop entry and icons.
 
 Options:
   --prefix DIR     install below DIR/share (default: ~/.local, or
@@ -39,8 +39,8 @@ Options:
   -h, --help       show this help
 
 Files:
-  <data>/applications/image-swiper.desktop
-  <data>/icons/hicolor/<size>/apps/image-swiper.{png,svg}
+  <data>/applications/swipey-photos.desktop
+  <data>/icons/hicolor/<size>/apps/swipey-photos.{png,svg}
 EOF
 }
 
@@ -92,7 +92,7 @@ ICONS_DIR="$DATA_ROOT/icons"
 
 [ -f "$DATA_FILE" ] || fail "missing $DATA_FILE (run this script from the packaging directory of a release tarball)"
 
-# Turn .../icons/hicolor/48x48/apps/image-swiper.png into hicolor/48x48/apps/image-swiper.png.
+# Turn .../icons/hicolor/48x48/apps/swipey-photos.png into hicolor/48x48/apps/swipey-photos.png.
 # Done with basename/dirname rather than a ${var#prefix} expansion so that a
 # checkout path containing glob characters cannot confuse the pattern match.
 icon_relpath() {
@@ -115,12 +115,12 @@ update_caches() {
 
 if [ "$UNINSTALL" -eq 1 ]; then
     removed=0
-    if [ -f "$APPLICATIONS_DIR/image-swiper.desktop" ]; then
-        rm -f "$APPLICATIONS_DIR/image-swiper.desktop"
+    if [ -f "$APPLICATIONS_DIR/swipey-photos.desktop" ]; then
+        rm -f "$APPLICATIONS_DIR/swipey-photos.desktop"
         removed=$((removed + 1))
     fi
     if [ -d "$ICONS_SRC/hicolor" ]; then
-        for icon in "$ICONS_SRC"/hicolor/*/apps/image-swiper.*; do
+        for icon in "$ICONS_SRC"/hicolor/*/apps/swipey-photos.*; do
             [ -e "$icon" ] || continue
             target="$ICONS_DIR/$(icon_relpath "$icon")"
             if [ -e "$target" ]; then
@@ -144,9 +144,9 @@ if [ "$UNINSTALL" -eq 1 ]; then
     exit 0
 fi
 
-install -D -m 644 "$DATA_FILE" "$APPLICATIONS_DIR/image-swiper.desktop"
+install -D -m 644 "$DATA_FILE" "$APPLICATIONS_DIR/swipey-photos.desktop"
 installed=1
-for icon in "$ICONS_SRC"/hicolor/*/apps/image-swiper.*; do
+for icon in "$ICONS_SRC"/hicolor/*/apps/swipey-photos.*; do
     [ -e "$icon" ] || continue
     install -D -m 644 "$icon" "$ICONS_DIR/$(icon_relpath "$icon")"
     installed=$((installed + 1))
@@ -155,7 +155,7 @@ done
 update_caches
 
 printf 'Installed %s file(s) into %s\n' "$installed" "$DATA_ROOT"
-printf 'Desktop entry: %s\n' "$APPLICATIONS_DIR/image-swiper.desktop"
-if ! command -v image-swiper >/dev/null 2>&1; then
-    printf 'note: `image-swiper` is not on PATH yet; install the package first (pip install .) so the launcher can start it\n'
+printf 'Desktop entry: %s\n' "$APPLICATIONS_DIR/swipey-photos.desktop"
+if ! command -v swipey-photos >/dev/null 2>&1; then
+    printf 'note: `swipey-photos` is not on PATH yet; install the package first (pip install .) so the launcher can start it\n'
 fi

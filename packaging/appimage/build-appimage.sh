@@ -1,13 +1,13 @@
 #!/bin/sh
-# Build a single-file AppImage for ImageSwiper.
+# Build a single-file AppImage for Swipey Photos.
 #
 #   ./packaging/appimage/build-appimage.sh                    # needs appimagetool
 #   ./packaging/appimage/build-appimage.sh --staging-only     # stop after staging
 #   APPIMAGETOOL=/path/to/appimagetool ./packaging/appimage/build-appimage.sh
 #
 # What it does
-#   1. Copies a *relocatable* CPython into ImageSwiper.AppDir/usr.
-#   2. Installs ImageSwiper and its runtime dependencies into that interpreter's
+#   1. Copies a *relocatable* CPython into SwipeyPhotos.AppDir/usr.
+#   2. Installs Swipey Photos and its runtime dependencies into that interpreter's
 #      site-packages (uv when available, pip otherwise).
 #   3. Adds AppRun, the .desktop entry and the icon, then calls appimagetool.
 #
@@ -37,13 +37,13 @@ usage() {
     cat <<'EOF'
 Usage: build-appimage.sh [options]
 
-Bundle ImageSwiper into an AppImage.
+Bundle Swipey Photos into an AppImage.
 
 Options:
   --python PATH     relocatable interpreter to bundle (default: $APPIMAGE_PYTHON,
                     then the interpreter that `uv python find` reports)
   --output DIR      where to stage and write the artifact (default: build/appimage)
-  --staging-only    build ImageSwiper.AppDir but skip appimagetool
+  --staging-only    build SwipeyPhotos.AppDir but skip appimagetool
   --appimagetool P  appimagetool binary (default: $APPIMAGETOOL, then PATH)
   -h, --help        show this help
 
@@ -120,11 +120,11 @@ if ldd "$PYTHON" 2>/dev/null | grep -q 'libpython'; then
 fi
 
 VERSION=$("$PYTHON" -c 'import pathlib, re, sys
-init = pathlib.Path(sys.argv[1]) / "src" / "image_swiper" / "__init__.py"
+init = pathlib.Path(sys.argv[1]) / "src" / "swipey_photos" / "__init__.py"
 print(re.search(r"__version__ = \"([^\"]+)\"", init.read_text()).group(1))' "$ROOT")
-[ -n "$VERSION" ] || fail "could not read the version from src/image_swiper/__init__.py"
+[ -n "$VERSION" ] || fail "could not read the version from src/swipey_photos/__init__.py"
 
-APP_DIR=$OUTPUT/ImageSwiper.AppDir
+APP_DIR=$OUTPUT/SwipeyPhotos.AppDir
 SITE_REL=$("$PYTHON" -c 'import sys; print(f"lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages")')
 PY_REL=$("$PYTHON" -c 'import sys; print(f"bin/python{sys.version_info.major}.{sys.version_info.minor}")')
 
@@ -146,7 +146,7 @@ SITE=$APP_DIR/usr/$SITE_REL
 [ -x "$BUNDLED_PY" ] || fail "the staged interpreter is missing: $BUNDLED_PY"
 mkdir -p "$SITE"
 
-printf 'Installing ImageSwiper %s and its dependencies\n' "$VERSION"
+printf 'Installing Swipey Photos %s and its dependencies\n' "$VERSION"
 # shellcheck disable=SC2086  # APPIMAGE_PIP_ARGS is a list on purpose
 if command -v uv >/dev/null 2>&1; then
     uv pip install --python "$BUNDLED_PY" --target "$SITE" ${APPIMAGE_PIP_ARGS:-} "$ROOT"
@@ -169,7 +169,7 @@ done
 
 cat > "$APP_DIR/AppRun" <<'APPRUN'
 #!/bin/sh
-# Entry point of the ImageSwiper AppImage: run the bundled interpreter, which
+# Entry point of the Swipey Photos AppImage: run the bundled interpreter, which
 # finds its standard library relative to its own path inside the bundle.
 set -eu
 # Resolve our own directory instead of trusting $APPDIR: the runtime does set it,
@@ -178,19 +178,19 @@ set -eu
 APPDIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 export PYTHONNOUSERSITE=1
 export PYTHONDONTWRITEBYTECODE=1
-exec "$APPDIR/usr/bin/python3" -m image_swiper "$@"
+exec "$APPDIR/usr/bin/python3" -m swipey_photos "$@"
 APPRUN
 chmod +x "$APP_DIR/AppRun"
 
 # The desktop entry names the launcher, the icon and the WM_CLASS; the AppImage
 # runtime supplies the real path when it integrates the bundle into a menu.
-sed 's/^Exec=.*/Exec=image-swiper/' "$SCRIPT_DIR/../image-swiper.desktop" \
-    > "$APP_DIR/image-swiper.desktop"
-cp "$SCRIPT_DIR/../icons/hicolor/256x256/apps/image-swiper.png" "$APP_DIR/.DirIcon"
-cp "$SCRIPT_DIR/../icons/hicolor/scalable/apps/image-swiper.svg" "$APP_DIR/image-swiper.svg"
+sed 's/^Exec=.*/Exec=swipey-photos/' "$SCRIPT_DIR/../swipey-photos.desktop" \
+    > "$APP_DIR/swipey-photos.desktop"
+cp "$SCRIPT_DIR/../icons/hicolor/256x256/apps/swipey-photos.png" "$APP_DIR/.DirIcon"
+cp "$SCRIPT_DIR/../icons/hicolor/scalable/apps/swipey-photos.svg" "$APP_DIR/swipey-photos.svg"
 
 printf 'Staged %s\n' "$APP_DIR"
-"$BUNDLED_PY" -c 'import image_swiper, PyQt6.QtWidgets, PIL; print("bundle check:", image_swiper.__file__)' \
+"$BUNDLED_PY" -c 'import swipey_photos, PyQt6.QtWidgets, PIL; print("bundle check:", swipey_photos.__file__)' \
     || fail "the staged bundle cannot import its dependencies"
 
 if [ "$STAGING_ONLY" -eq 1 ]; then
@@ -210,7 +210,7 @@ if [ -z "$APPIMAGETOOL" ]; then
 fi
 
 ARCH=$(uname -m)
-TARGET=$OUTPUT/image-swiper-$VERSION-$ARCH.AppImage
+TARGET=$OUTPUT/swipey-photos-$VERSION-$ARCH.AppImage
 printf 'Packaging %s\n' "$TARGET"
 ARCH=$ARCH "$APPIMAGETOOL" "$APP_DIR" "$TARGET"
 printf 'Wrote %s\n' "$TARGET"
