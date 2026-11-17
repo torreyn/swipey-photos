@@ -7,7 +7,8 @@ Coverage
       the canonical category, including for lower-case input;
     * the interactive gate: ``set_interactive(False)`` disables the card and
       makes ``trigger_swipe`` a no-op, so a move in flight cannot be doubled;
-    * the geometry contract: the card fills the stage and is not in a layout.
+    * the geometry contract: the card fills the stage and is not in a layout;
+    * the stage keeps no gesture legend: the key map lives on the footer buttons.
 
 Animations are left at their production duration here (250 ms); the tests wait
 on the signal or on a condition instead of sleeping, so they stay deterministic.
@@ -111,23 +112,13 @@ def test_caption_can_be_switched_off(qtbot: QtBot) -> None:
     assert not _caption(widget).isVisible()
 
 
-def test_legend_shows_the_gesture_map(qtbot: QtBot) -> None:
-    """The key map is visible under the card."""
+def test_stage_shows_no_gesture_legend(qtbot: QtBot) -> None:
+    """The key map moved onto the footer buttons, so the stage stays quiet."""
     widget = SwipeWidget()
     qtbot.addWidget(widget)
     widget.show()
 
-    assert widget.legend.text() == "← Bad    ↓ OK    ↑ Great    → Good"
-    assert widget.legend.isVisible()
-
-
-def test_legend_can_be_switched_off(qtbot: QtBot) -> None:
-    """A bare stage hides the hint together with the caption."""
-    widget = SwipeWidget(show_legend=False)
-    qtbot.addWidget(widget)
-    widget.show()
-
-    assert not widget.legend.isVisible()
+    assert widget.findChild(QLabel, "swipe_legend") is None
 
 
 def test_show_image_fades_the_card_in(qtbot: QtBot) -> None:

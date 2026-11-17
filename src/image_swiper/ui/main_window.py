@@ -11,8 +11,9 @@ Composition
     * A ``QStackedWidget`` with three pages: :class:`WelcomeScreen`, the swipe
       stage (:class:`SwipeWidget`) and :class:`CompletionScreen`.
     * Header with ``"Image 3 of 47"`` and the folder path; footer with four
-      buttons (Bad, OK, Good, Great) for users who prefer clicking to dragging,
-      and a gesture legend under the card.
+      buttons for users who prefer clicking to dragging. Each caption repeats
+      the gesture it stands for (``← Bad``, ``↓ OK``, ``↑ Great``, ``Good →``),
+      so the footer carries the key map that used to sit under the card.
     * Menus: *File* → Open Folder (Ctrl+O), Rescan Folder (F5, Ctrl+R), Undo
       Last (Ctrl+Z), Quit (Ctrl+Q); *View* → Dark Mode, Full Screen (F11);
       *Help* → Keyboard Shortcuts (F1, ?) and About. The status bar shows the
@@ -152,6 +153,20 @@ CATEGORY_HINTS: dict[str, str] = {
     "Great": "↑ or W",
 }
 """Short human hints reused in button tooltips."""
+
+CATEGORY_BUTTON_LABELS: dict[str, str] = {
+    "Bad": "← Bad",
+    "OK": "↓ OK",
+    "Great": "↑ Great",
+    "Good": "Good →",
+}
+"""Footer captions: each button shows the gesture that triggers the same bucket.
+
+The arrow leads the word on three of them; ``Good`` trails it (``Good →``), so
+the right-swipe button reads the way the card moves. Kept as data rather than
+built from :data:`CATEGORY_HINTS` because the placement is a layout choice, not
+a string transform.
+"""
 
 RESCAN_SHORTCUTS: tuple[QKeySequence, ...] = (
     QKeySequence(Qt.Key.Key_F5),
@@ -335,7 +350,7 @@ class MainWindow(QMainWindow):
     def _build_category_button(self, category: str, parent: QWidget) -> QPushButton:
         """Return a footer button that commits *category* when clicked."""
         colour = CATEGORY_COLORS[category]
-        button = QPushButton(category, parent)
+        button = QPushButton(CATEGORY_BUTTON_LABELS[category], parent)
         button.setObjectName(f"category_button_{category}")
         button.setMinimumSize(120, 44)
         button.setCursor(Qt.CursorShape.PointingHandCursor)

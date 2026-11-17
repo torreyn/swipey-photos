@@ -19,8 +19,7 @@ Contains
     swipe_card.py       SwipeCard: renders one image, owns the drag/rotation
                         maths, paints the feedback badge, flies itself out.
     swipe_widget.py     SwipeWidget/CardStage: the stage that hosts the card,
-                        feeds it pixmaps, shows the gesture legend and forwards
-                        committed categories.
+                        feeds it pixmaps and forwards committed categories.
     animator.py         CardAnimator: deck-level choreography (150 ms card
                         entrance fade/slide) and the shared timing/easing
                         policy.

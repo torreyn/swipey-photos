@@ -41,9 +41,9 @@ implemented and tested — image loading with EXIF handling, the four-way sorter
 with undo, the folder manager, collision-safe file operations, JSON
 configuration and rotating logs. The Qt side is wired up too: the swipe card
 (drag physics, rotation, directional feedback, drop shadow, fly-out), the stage
-around it with its gesture legend, the welcome screen with recent folders, the
-completion summary and the main window (menus, progress, footer buttons, live
-status-bar counts, config persistence). Install it from a checkout with
+around it, the welcome screen with recent folders, the completion summary and the
+main window (menus, progress, arrow-labelled footer buttons, live status-bar
+counts, config persistence). Install it from a checkout with
 `pip install .`, run it with `image-swiper` or `python -m image_swiper`, and sort a
 folder end to end (388 tests, green on Python 3.11–3.13 in CI). `packaging/` adds
 the `.desktop` entry, the generated icon theme and an AppImage build script — see
@@ -78,8 +78,8 @@ Everything below ships in v1.0 unless marked otherwise:
 - **Remembers context.** Last folder, window size and theme are persisted to a
   human-editable JSON config; *View → Dark Mode* switches palettes live.
 - **Looks the part.** Rounded card with a blurred drop shadow, a 150 ms fade-in
-  for each new image, a `← Bad ↓ OK ↑ Great → Good` hint under the card and a
-  live per-category summary bar at the bottom.
+  for each new image, footer buttons that spell out their swipe (`← Bad`,
+  `↓ OK`, `↑ Great`, `Good →`) and a live per-category summary bar at the bottom.
 - **Safe to try.** `image-swiper --dry-run FOLDER` logs what it *would* move and
   leaves every file untouched, so you can rehearse a sort first.
 - **Fits your desktop.** `packaging/install-desktop.sh` adds a menu entry and a
@@ -239,8 +239,8 @@ Paths, icon regeneration and the AppImage build live in
 3. **Swipe.** Drag the photo with the mouse, flick it with a touchscreen, or
    press an arrow/WASD key. Release past roughly a third of the window width
    (or press a key) to commit; release earlier and the card springs back. The
-   four footer buttons (*Bad*, *OK*, *Good*, *Great*) do the same for anyone who
-   prefers clicking.
+   four footer buttons carry the same map for anyone who prefers clicking:
+   *← Bad*, *↓ OK*, *↑ Great* and *Good →*.
 4. **Watch it move.** The file is moved into `Good/`, `Bad/`, `Great/` or `OK/`
    inside the folder you opened. The next image appears and the header counts
    `Image 3 of 47`.

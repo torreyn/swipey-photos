@@ -32,7 +32,7 @@ import pytest
 from PIL import Image
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtWidgets import QLabel, QWidget
 
 from helpers import FakeFileDialog
 from image_swiper.core.folder_manager import CATEGORIES
@@ -831,18 +831,23 @@ def test_shortcut_help_reuses_one_overlay(qtbot: QtBot, window: Callable[..., Ma
 
 
 # ----------------------------------------------------------------------
-# Polish: theme, legend, summary bar, prefetching and dry run
+# Polish: theme, footer labels, summary bar, prefetching and dry run
 # ----------------------------------------------------------------------
 
 
-def test_stage_shows_the_gesture_legend(window: Callable[..., MainWindow]) -> None:
-    """The key map is repeated under the card, not only in tooltips."""
+def test_footer_buttons_show_their_swipe_arrows(window: Callable[..., MainWindow]) -> None:
+    """Each caption repeats its gesture; nothing else hints at the keys."""
     created = window()
 
-    legend = created.swipe_widget.legend
+    labels = {category: button.text() for category, button in created.category_buttons.items()}
 
-    assert legend.text() == "← Bad    ↓ OK    ↑ Great    → Good"
-    assert legend.isVisibleTo(created.swipe_widget)
+    assert labels == {
+        "Bad": "← Bad",
+        "OK": "↓ OK",
+        "Great": "↑ Great",
+        "Good": "Good →",
+    }
+    assert created.swipe_widget.findChild(QLabel, "swipe_legend") is None
 
 
 def test_summary_bar_uses_the_category_colours(

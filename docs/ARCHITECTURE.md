@@ -110,7 +110,7 @@ configuration file stays human-editable and greppable.
 | `ui/main_window.py` | UI | layout, actions/shortcuts, session presentation | read/decode files |
 | `ui/shortcut_overlay.py` | UI | shortcut reference grid, key-cap styling | read session state or files |
 | `ui/swipe_card.py` | UI | one image: fit, drag maths, badge, fly-out, keys | know about folders, files or categories on disk |
-| `ui/swipe_widget.py` | UI | stage geometry, image hand-off, caption and legend, signal forwarding | touch the filesystem |
+| `ui/swipe_widget.py` | UI | stage geometry, image hand-off, caption, signal forwarding | touch the filesystem, own the key map |
 | `ui/animator.py` | UI | card entrance fade/slide, timing and easing | know about `Path` or config files |
 | `ui/workers.py` | UI↔core | thread-pool preview prefetch, cache, signal marshalling | mutate widgets or decode into `QPixmap` |
 | `ui/image_utils.py` | UI↔core | Pillow → `QImage`/`QPixmap` conversion | own policy or I/O |
@@ -230,11 +230,13 @@ the radius stays modest; translation alone (the fly-out) reuses the cached blur.
 
 **`SwipeWidget`** is the stage: a `CardStage` that assigns the card geometry in
 `resizeEvent` (the card cannot live in a layout because it moves itself), plus a
-caption line and the `← Bad ↓ OK ↑ Great → Good` legend. It shows one pixmap at
-a time, re-arms the card with `set_pixmap`, starts the entrance animation
-(`CardAnimator.fly_in`), forwards `SwipeCard.swiped` as `swipe_committed(str)`
-and gates commits with `set_interactive(False)` while the window is busy. It
-owns no session state and touches no files.
+caption line. It shows one pixmap at a time, re-arms the card with `set_pixmap`,
+starts the entrance animation (`CardAnimator.fly_in`), forwards `SwipeCard.swiped`
+as `swipe_committed(str)` and gates commits with `set_interactive(False)` while
+the window is busy. It owns no session state and touches no files. The key map is
+not its business: `MainWindow` puts the arrows on the footer captions
+(`CATEGORY_BUTTON_LABELS`), which is why nothing sits between the card and the
+footer.
 
 **`WelcomeScreen`** and **`CompletionScreen`** are pure views. The welcome page
 reports a chosen folder and lists at most five recents; the summary renders the
