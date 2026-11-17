@@ -365,7 +365,7 @@ def test_build_script_is_executable_and_documents_its_contract() -> None:
 
 
 def test_ci_workflow_runs_the_documented_checks() -> None:
-    """Lint, format, types and coverage run on ubuntu-latest for 3.11 and 3.12."""
+    """Lint, format, types and coverage run on the pinned image for 3.11 and 3.12."""
     ci = _workflow("ci.yml")
     matrix = ci["jobs"]["checks"]["strategy"]["matrix"]["python-version"]
     runs = _job_runs(ci, "checks")
@@ -386,6 +386,19 @@ def test_ci_workflow_runs_the_gui_tests_under_xvfb() -> None:
 
     assert "xvfb-run" in runs
     assert "-m gui" in runs
+
+
+def test_workflows_pin_a_fixed_runner_image() -> None:
+    """``ubuntu-latest`` moves to a new Ubuntu on its own; these builds must not.
+
+    The AppImage is staged against the host's Qt client libraries and
+    appimagetool, so a surprise image bump is a release failure, not an
+    upgrade. ``ubuntu-latest`` starts migrating to Ubuntu 26 on 2026-10-19.
+    """
+    for name in ("ci.yml", "release.yml"):
+        workflow = _workflow(name)
+        for job, config in workflow["jobs"].items():
+            assert config["runs-on"] == "ubuntu-24.04", f"{name}: {job} floats its runner image"
 
 
 def test_release_workflow_attaches_every_artefact_to_a_tagged_release() -> None:

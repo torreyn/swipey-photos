@@ -1,5 +1,8 @@
 name: ci
 
+# Runner images and action majors are pinned. `ubuntu-latest` starts migrating
+# to Ubuntu 26 on 2026-10-19, and the majors that still declare Node 20 are
+# force-run on Node 24 and reported as a deprecation warning on every job.
 on:
   push:
     branches: [main]
@@ -15,16 +18,16 @@ concurrency:
 jobs:
   checks:
     name: py${{ matrix.python-version }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -66,7 +69,7 @@ jobs:
 
       - name: Upload the coverage report
         if: matrix.python-version == '3.13'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-xml
           path: coverage.xml
@@ -78,11 +81,11 @@ jobs:
   # assumption fails here rather than on a user's machine.
   gui-xvfb:
     name: gui (xvfb)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -104,11 +107,11 @@ jobs:
 
   package:
     name: package
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -138,7 +141,7 @@ jobs:
           /tmp/verify/bin/swipey-photos --version
           /tmp/verify/bin/swipey-photos --help
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: swipey-photos-dist
           path: dist/*

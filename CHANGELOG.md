@@ -13,7 +13,19 @@ artefact. New entries go under `[Unreleased]` and move down when a tag is cut �
 
 ## [Unreleased]
 
-_Nothing yet._
+### Changed
+
+- **CI on Node 24** — the workflows use `actions/checkout@v7`,
+  `actions/setup-python@v7`, `actions/upload-artifact@v7`,
+  `actions/download-artifact@v8`, `astral-sh/setup-uv@v10.3.3` and
+  `softprops/action-gh-release@v3`, so GitHub no longer reports the Node 20
+  deprecation on every job. `setup-uv` is pinned to a release because v8
+  stopped publishing floating major tags.
+- **Pinned runner image** — every job runs on `ubuntu-24.04` instead of
+  `ubuntu-latest`, which starts migrating to Ubuntu 26 on 2026-10-19. The
+  AppImage is staged against the host's Qt client libraries, so the image is
+  part of the build recipe; `tests/test_packaging.py` fails if a job floats.
+
 
 ## [1.0.0] - 2026-11-17
 

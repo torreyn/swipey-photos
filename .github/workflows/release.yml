@@ -1,5 +1,10 @@
 name: release
 
+# Runner images and action majors are pinned for the same reason as ci.yml:
+# `ubuntu-latest` migrates to Ubuntu 26 on 2026-10-19, and the AppImage bundle
+# is checked against the host's Qt client libraries. astral-sh/setup-uv stopped
+# publishing floating major tags in v8, so that one is pinned to a release.
+
 # Tag a commit (`git tag -a v1.0.0 -m "1.0.0" && git push origin v1.0.0`) and
 # this workflow attaches the artefacts to the GitHub Release: a one-file Linux
 # binary, an AppImage that also carries the Qt system libraries, the wheel and
@@ -37,11 +42,11 @@ env:
 jobs:
   binary:
     name: binary (linux x86_64)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -73,7 +78,7 @@ jobs:
       - name: Name the asset after the tag
         run: mv dist/swipey-photos "dist/swipey-photos-${TAG}-linux-x86_64"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: binary
           path: dist/swipey-photos-*
@@ -81,9 +86,9 @@ jobs:
 
   appimage:
     name: appimage (linux x86_64)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The staged-bundle check imports PyQt6 before the squashfs is written, so
       # the runner needs the same Qt client libraries the binary job installs.
@@ -98,7 +103,7 @@ jobs:
       # The bundle embeds CPython, and it has to be a *relocatable* build: a
       # distribution Python links /usr/lib/libpython, which is absent on the
       # user's machine. python-build-standalone (what uv downloads) is not.
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v10.3.3
       - name: Install a relocatable CPython
         run: uv python install 3.13
 
@@ -133,7 +138,7 @@ jobs:
           mv build/appimage/swipey-photos-*.AppImage \
             "build/appimage/swipey-photos-${TAG}-linux-x86_64.AppImage"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: appimage
           path: build/appimage/swipey-photos-*.AppImage
@@ -141,11 +146,11 @@ jobs:
 
   dist:
     name: sdist + wheel
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -157,7 +162,7 @@ jobs:
           python -m build
           python -m twine check dist/*
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: python-dist
           path: dist/*
@@ -166,11 +171,11 @@ jobs:
   publish:
     name: publish
     needs: [binary, appimage, dist]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: release-assets
           merge-multiple: true
@@ -178,7 +183,7 @@ jobs:
       - name: List the assets
         run: ls -l release-assets
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.TAG }}
           files: release-assets/*
