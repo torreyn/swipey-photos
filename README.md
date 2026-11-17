@@ -62,7 +62,7 @@ counts, config persistence). Install it with `pipx install
 git+https://github.com/torreyn/swipey-photos.git`, download the standalone binary
 from the [latest release](https://github.com/torreyn/swipey-photos/releases/latest),
 or work from a checkout with `pip install .`; then run `swipey-photos` or
-`python -m swipey_photos` and sort a folder end to end (397 tests, green on Python
+`python -m swipey_photos` and sort a folder end to end (400 tests, green on Python
 3.11–3.13 in CI, ~94 % statement coverage). `packaging/` adds the `.desktop`
 entry, the generated icon theme and an AppImage build script, and
 `scripts/build.sh` produces the one-file binary — see
