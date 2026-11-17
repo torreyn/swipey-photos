@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="180.622mm" height="180.622mm"
+ viewBox="0 0 512 512"
+ xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.2" baseProfile="tiny">
+<title>ImageSwiper</title>
+<desc>Sort a folder of photos with a swipe.</desc>
+<defs>
+<linearGradient gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="512" y2="512" id="gradient1">
+    <stop offset="0" stop-color="#1f4e79" stop-opacity="1" />
+    <stop offset="1" stop-color="#7b3f9d" stop-opacity="1" />
+</linearGradient>
+</defs>
+<g fill="none" stroke="black" stroke-width="1" fill-rule="evenodd" stroke-linecap="square" stroke-linejoin="bevel" >
+
+<g fill="url(#gradient1)" stroke="none" transform="matrix(1,0,0,1,0,0)"
+font-family="Sans Serif" font-size="9" font-weight="400" font-style="normal" 
+>
+<path vector-effect="none" fill-rule="evenodd" d="M0,122.88 C0,55.0152 55.0152,0 122.88,0 L389.12,0 C456.985,0 512,55.0152 512,122.88 L512,389.12 C512,456.985 456.985,512 389.12,512 L122.88,512 C55.0152,512 0,456.985 0,389.12 L0,122.88 Z "/>
+</g>
+
+<g fill="#ffffff" fill-opacity="0.215686" stroke="none" transform="matrix(1,0,0,1,0,0)"
+font-family="Sans Serif" font-size="9" font-weight="400" font-style="normal" 
+>
+</g>
+
+<g fill="#ffffff" fill-opacity="0.215686" stroke="none" transform="matrix(0.992546,-0.121869,0.121869,0.992546,256,256)"
+font-family="Sans Serif" font-size="9" font-weight="400" font-style="normal" 
+>
+<path vector-effect="none" fill-rule="evenodd" d="M-143.36,-133.12 C-143.36,-150.086 -129.606,-163.84 -112.64,-163.84 L112.64,-163.84 C129.606,-163.84 143.36,-150.086 143.36,-133.12 L143.36,122.88 C143.36,139.846 129.606,153.6 112.64,153.6 L-112.64,153.6 C-129.606,153.6 -143.36,139.846 -143.36,122.88 L-143.36,-133.12 Z "/>
+</g>
+
+<g fill="#ffffff" fill-opacity="0.215686" stroke="none" transform="matrix(1,0,0,1,0,0)"
+font-family="Sans Serif" font-size="9" font-weight="400" font-style="normal" 
+>
+</g>
+
+<g fill="#ffffff" fill-opacity="0.215686" stroke="none" transform="matrix(0.992546,0.121869,-0.121869,0.992546,256,256)"
+font-family="Sans Serif" font-size="9" font-weight="400" font-style="normal" 
+>
+<path vector-effect="none" fill-rule="evenodd" d="M-143.36,-133.12 C-143.36,-150.086 -129.606,-163.84 -112.64,-163.84 L112.64,-163.84 C129.606,-163.84 143.36,-150.086 143.36,-133.12 L143.36,122.88 C143.36,139.846 129.606,153.6 112.64,153.6 L-112.64,153.6 C-129.606,153.6 -143.36,139.846 -143.36,122.88 L-143.36,-133.12 Z "/>
+</g>
+
+<g fill="#ffffff" fill-opacity="0.215686" stroke="none" transform="matrix(1,0,0,1,0,0)"
+font-family="Sans Serif" font-size="9" font-weight="400" font-style="normal" 
+>
+</g>
+
+<g fill="#ffffff" fill-opacity="0.921569" stroke="none" transform="matrix(1,0,0,1,0,0)"
+font-family="Sans Serif" font-size="9" font-weight="400" font-style="normal" 
+>
+<path vector-effect="none" fill-rule="evenodd" d="M122.88,133.12 C122.88,116.154 136.634,102.4 153.6,102.4 L358.4,102.4 C375.366,102.4 389.12,116.154 389.12,133.12 L389.12,378.88 C389.12,395.846 375.366,409.6 358.4,409.6 L153.6,409.6 C136.634,409.6 122.88,395.846 122.88,378.88 L122.88,133.12 Z "/>
+</g>
+
+<g fill="none" stroke="#ff5b5b" stroke-opacity="1" stroke-width="38.4" stroke-linecap="round" stroke-linejoin="round" transform="matrix(1,0,0,1,0,0)"
+font-family="Sans Serif" font-size="9" font-weight="400" font-style="normal" 
+>
+<polyline fill="none" vector-effect="none" points="215.04,204.8 168.96,256 215.04,307.2 " />
+</g>
+
+<g fill="none" stroke="#3ddc84" stroke-opacity="1" stroke-width="38.4" stroke-linecap="round" stroke-linejoin="round" transform="matrix(1,0,0,1,0,0)"
+font-family="Sans Serif" font-size="9" font-weight="400" font-style="normal" 
+>
+<polyline fill="none" vector-effect="none" points="296.96,204.8 343.04,256 296.96,307.2 " />
+</g>
+</g>
+</svg>

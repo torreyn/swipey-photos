@@ -14,6 +14,7 @@ strategy, debugging Qt on Linux, and the release checklist.
 | ruff | latest | lint, import sorting and formatting (`ruff check` + `ruff format`) |
 | mypy | 1.10+ | strict typing for `src/` |
 | build | 1.2+ | sdist/wheel verification |
+| desktop-file-utils | optional | `desktop-file-validate` for `packaging/*.desktop` (the test skips without it) |
 
 System Qt libraries (XCB plugin pieces) are listed in
 [README → Installation](../README.md#1-system-packages-qt-runtime--python-tooling).
@@ -178,7 +179,7 @@ directory, permission denied, and source == destination.
 
 ```bash
 python -m build                 # sdist + wheel into dist/
-python -m zipfile -l dist/image_swiper-0.1.0-py3-none-any.whl
+python -m zipfile -l dist/image_swiper-1.0.0-py3-none-any.whl
 
 # Verify a clean install in a throwaway venv
 python3 -m venv /tmp/is-verify
@@ -190,6 +191,20 @@ python3 -m venv /tmp/is-verify
 The wheel must contain `image_swiper/py.typed` and all subpackages. The version
 is read from `src/image_swiper/__init__.py` via Hatch, so bumping it in one
 place is enough (do not also edit `pyproject.toml`).
+
+The sdist also carries `packaging/`, which is where the desktop entry, the icon
+theme and the AppImage script live. Their contract — `Icon=` matches the
+installed files, `Exec=` names the console script, `StartupWMClass` matches
+`app.DESKTOP_FILE_NAME` — is enforced by `tests/test_packaging.py`, so a broken
+launcher fails `pytest` instead of a user's menu. Desktop install:
+
+```bash
+./packaging/install-desktop.sh --prefix /usr --destdir /tmp/stage   # inspect
+QT_QPA_PLATFORM=offscreen python packaging/render_icons.py          # after branding changes
+```
+
+[PACKAGING.md](PACKAGING.md) documents the file layout, the AppImage build and
+the Flatpak status.
 
 If `python -m build` fails with
 `The virtual environment was not created successfully because ensurepip is not
@@ -209,11 +224,14 @@ twine check dist/*
 1. `git switch -c release/x.y.z`
 2. Bump `__version__` in `src/image_swiper/__init__.py`.
 3. Update the README roadmap and any changed docs (`CONFIGURATION.md` keys).
-4. `ruff check . && ruff format --check . && mypy && pytest -q`
-5. `python -m build` and verify the wheel in a clean venv (see §7).
-6. Smoke-test on X11 **and** Wayland, with at least one real photo folder.
-7. Tag `vX.Y.Z`, push the tag, upload `dist/*`.
-8. Announce changes; keep the previous minor's config schema readable.
+4. Regenerate the icons if `ui/branding.py` changed (§7) and rerun
+   `desktop-file-validate packaging/image-swiper.desktop`.
+5. `ruff check . && ruff format --check . && mypy && pytest -q`
+6. `python -m build` and verify the wheel in a clean venv (see §7).
+7. Smoke-test on X11 **and** Wayland, with at least one real photo folder.
+8. Install the desktop entry and check the menu icon, then `--uninstall`.
+9. Tag `vX.Y.Z`, push the tag, upload `dist/*` (and the AppImage if built).
+10. Announce changes; keep the previous minor's config schema readable.
 
 ## 9. Continuous integration
 
@@ -239,6 +257,19 @@ CI without editing the workflow, and the `setup-python` pip cache is keyed on
 `pyproject.toml` for the same reason. If a step starts failing only on a new
 Python version, add that version to `requires-python`, the classifiers and the
 matrix together.
+
+The packaging tests live inside the same `pytest` run: they parse
+`packaging/image-swiper.desktop`, compare the icon tree with
+`ui/branding.ICON_SIZES`, run both shell scripts against `tmp_path` and use
+`desktop-file-validate` when the runner provides it (it is part of
+`desktop-file-utils`, which the Ubuntu image already has). The AppImage build
+itself is *not* in CI — it needs a relocatable CPython plus the network — so it
+is verified by hand before a release (§8).
+
+A second job, `package`, builds the sdist and wheel once (Python 3.13), asserts
+that the sdist contains `packaging/image-swiper.desktop` and the scalable icon,
+installs the wheel into a clean virtual environment and runs
+`image-swiper --version`, then uploads `dist/*` as a build artefact.
 
 ## 10. Editor setup (VSCode)
 

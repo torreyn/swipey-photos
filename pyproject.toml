@@ -13,7 +13,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "ImageSwiper contributors" }]
 keywords = ["images", "photos", "sorting", "culling", "pyqt6", "qt", "linux", "desktop"]
 classifiers = [
-  "Development Status :: 2 - Pre-Alpha",
+  "Development Status :: 5 - Production/Stable",
   "Environment :: X11 Applications :: Qt",
   "Intended Audience :: End Users/Desktop",
   "Operating System :: POSIX :: Linux",
@@ -60,6 +60,7 @@ include = [
   "/src",
   "/tests",
   "/docs",
+  "/packaging",
   "/README.md",
   "/LICENSE",
   "/CONTRIBUTING.md",

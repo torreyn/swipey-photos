@@ -17,7 +17,7 @@ Be kind, assume good intent, and critique code — not people.
 | 💡 Feature idea | Open an issue first so we can agree on scope before code is written |
 | 🧑‍💻 Code | Pick an issue labelled `good first issue` or `help wanted` and comment that you are taking it |
 | 🎨 Design / UX | Screenshots or mock-ups in an issue are very welcome; the swipe thresholds and animation timings need taste |
-| 🌍 Translations | Not wired up yet (M5); open an issue if you want to help |
+| 🌍 Translations | Not wired up yet (planned after 1.0); open an issue if you want to help |
 | 📝 Docs | Typos, clearer instructions and distro-specific notes are always appreciated |
 
 ---

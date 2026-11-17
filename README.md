@@ -12,7 +12,7 @@ gesture per photo.
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![Qt](https://img.shields.io/badge/Qt-6-green.svg)](https://www.qt.io/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-core%20implemented-orange.svg)](#project-status)
+[![Status](https://img.shields.io/badge/status-v1.0%20released-green.svg)](#project-status)
 
 > **Name note.** `ImageSwiper` is the working title, and the package/CLI
 > identifiers (`image_swiper`, `image-swiper`) follow it. The suggested
@@ -35,26 +35,25 @@ drop `*.png` files into [`docs/assets/`](docs/assets/) and reference them here
 
 ## Project status
 
-`v0.1.0` is **feature-complete for the core loop**. The Qt-free business layer is
+`v1.0.0` is the **first packaged release**: the core loop, the comfort pass and
+the desktop integration all ship together. The Qt-free business layer is
 implemented and tested — image loading with EXIF handling, the four-way sorter
 with undo, the folder manager, collision-safe file operations, JSON
 configuration and rotating logs. The Qt side is wired up too: the swipe card
-(drag physics, rotation, directional feedback, fly-out), the stage around it with
-its gesture legend, the welcome screen with recent folders, the completion
-summary and the main window (menus, progress, footer buttons, live status-bar
-counts, config persistence). You can start it with `python -m image_swiper` or
-the installed `image-swiper` script and sort a folder end to end (369 tests,
-green on Python 3.11–3.13 in CI). The polish pass has landed: 150 ms card
-fade-ins, background prefetch of the next previews, a dark-mode toggle, undo,
-`--dry-run`, and friendly handling of corrupt files, GIFs, huge images and
-folders that only contain subfolders. See the [roadmap](#roadmap) for what is
-next.
+(drag physics, rotation, directional feedback, drop shadow, fly-out), the stage
+around it with its gesture legend, the welcome screen with recent folders, the
+completion summary and the main window (menus, progress, footer buttons, live
+status-bar counts, config persistence). Install it with `pip install image-swiper`,
+run it with `image-swiper` or `python -m image_swiper`, and sort a folder end to
+end (388 tests, green on Python 3.11–3.13 in CI). `packaging/` adds the
+`.desktop` entry, the generated icon theme and an AppImage build script — see
+[`docs/PACKAGING.md`](docs/PACKAGING.md).
 
 ---
 
 ## Features
 
-Planned for v1.0 (see the roadmap for what is already implemented):
+Everything below ships in v1.0 unless marked otherwise:
 
 - **Four-way swipe sorting.** Each gesture maps to one destination folder:
 
@@ -83,6 +82,11 @@ Planned for v1.0 (see the roadmap for what is already implemented):
   live per-category summary bar at the bottom.
 - **Safe to try.** `image-swiper --dry-run FOLDER` logs what it *would* move and
   leaves every file untouched, so you can rehearse a sort first.
+- **Fits your desktop.** `packaging/install-desktop.sh` adds a menu entry and a
+  `hicolor` icon set (no desktop-file editing by hand), and
+  `packaging/appimage/build-appimage.sh` bundles Python and PyQt6 into a single
+  AppImage for machines without either. Details in
+  [`docs/PACKAGING.md`](docs/PACKAGING.md).
 - **Predictable buckets.** `Good/`, `Bad/`, `Great/` and `OK/` are created inside
   the folder you open, and a file is never overwritten — collisions gain a
   `_1`, `_2` suffix instead.
@@ -159,7 +163,9 @@ sudo pacman -S --needed python python-pip python-virtualenv \
 > Missing `libxcb-cursor0` is the single most common cause of
 > `qt.qpa.plugin: Could not load the Qt platform plugin "xcb"`.
 
-### 2. Clone and create a virtual environment
+### 2. Install ImageSwiper
+
+Not on PyPI yet — install from a checkout or from a release wheel:
 
 ```bash
 git clone https://github.com/torreyn/image-swiper.git
@@ -168,32 +174,45 @@ cd image-swiper
 python3 -m venv .venv
 source .venv/bin/activate          # fish: source .venv/bin/activate.fish
 python -m pip install --upgrade pip
+pip install -e ".[dev]"            # contributing; or: pip install dist/*.whl
 ```
 
-### 3. Install ImageSwiper
-
-Editable install with dev tooling (recommended for contributing):
-
-```bash
-pip install -e ".[dev]"
-```
-
-Runtime-only install:
+Runtime-only install from the checkout:
 
 ```bash
 pip install -r requirements.txt
 pip install -e .            # optional: gives you the `image-swiper` command
 ```
 
-### 4. Verify the installation
+### 3. Verify the installation
 
 ```bash
 python -c "import image_swiper; print(image_swiper.__version__)"
-image-swiper --version      # prints "ImageSwiper 0.1.0"
+image-swiper --version      # prints "ImageSwiper 1.0.0"
 ```
 
-> **Flatpak / AppImage:** not packaged yet. The app has no runtime dependency
-> outside PyPI + the Qt system libraries above, so both are feasible later.
+### 4. Add it to your application menu
+
+```bash
+./packaging/install-desktop.sh                      # this user (~/.local/share)
+sudo ./packaging/install-desktop.sh --prefix /usr   # every user
+```
+
+The entry appears as **ImageSwiper → Photo Sorter** with its own icon.
+`--uninstall` removes it again; `--destdir` stages a distribution package.
+Paths, icon regeneration and the AppImage build live in
+[`docs/PACKAGING.md`](docs/PACKAGING.md).
+
+> A menu launcher does not inherit an activated virtualenv: it runs
+> `image-swiper` from `PATH`. If you installed into `.venv`, either point the
+> install step at a user prefix (`pipx install .` or `pip install --user .`) or
+> edit `Exec=` in the installed `.desktop` file to the absolute path of the
+> script.
+
+> **No Python on the target machine?** A single-file AppImage is buildable from
+> the checkout with `packaging/appimage/build-appimage.sh`. Flatpak is not
+> shipped yet; [`docs/PACKAGING.md`](docs/PACKAGING.md#4-flatpak) explains what a
+> manifest would need.
 
 ---
 
@@ -339,11 +358,18 @@ image-swiper/
 │       ├── config.py          # JSON defaults/load/save, XDG paths, recent folders
 │       └── logging_setup.py   # rotating file logs + optional console handler
 ├── tests/                     # pytest suites mirroring src/ (pytest-qt for GUI)
+├── packaging/                 # desktop integration, no Python imports needed
+│   ├── image-swiper.desktop   # menu entry: Exec=image-swiper, Icon=image-swiper
+│   ├── install-desktop.sh     # install/uninstall entry + icons (prefix/destdir)
+│   ├── icons/hicolor/         # generated PNG sizes + one scalable SVG
+│   ├── render_icons.py        # regenerate the icon tree from ui/branding.py
+│   └── appimage/build-appimage.sh  # bundle CPython + PyQt6 into one AppImage
 ├── docs/
 │   ├── README.md              # documentation index and reading order
 │   ├── ARCHITECTURE.md        # layers, contracts, data flow, state machines
 │   ├── CONFIGURATION.md       # every option, defaults, precedence
 │   ├── DEVELOPMENT.md         # setup, commands, conventions, test strategy
+│   ├── PACKAGING.md           # desktop entry, icons, AppImage, distro notes
 │   └── assets/                # screenshots and mock-ups
 ├── pyproject.toml             # metadata, deps, tool config, entry point
 ├── requirements.txt           # runtime pins for plain pip workflows
@@ -369,7 +395,7 @@ imports with `ast` and fails on any Qt import below `ui/`. Details and rationale
 | **M2 — Swipe UI** | `swipe_card` (card, drag, badge, fly-out), `swipe_widget` stage, main window, welcome/summary pages, deck fly-in (`animator`) | ✅ done |
 | **M3 — Sorting** | `folder_manager`, `sorter`, `file_ops`, collision handling | ✅ done |
 | **M4 — Comfort** | Undo, config UI + dark mode, summary screen, logging, error reporting, rescan/full-screen/shortcut keys, shortcut overlay, prefetch workers, `--dry-run`, edge-case messaging | ✅ done |
-| **M5 — Distribution** | `.desktop` file, icons, AppImage/Flatpak, 1.0 | ⬜ planned |
+| **M5 — Distribution** | `.desktop` file, icons, AppImage/Flatpak, 1.0 | ✅ done (v1.0.0; Flatpak deferred, see [PACKAGING §4](docs/PACKAGING.md#4-flatpak)) |
 
 ---
 

@@ -284,7 +284,10 @@ where pointer handling, thresholds, rotation and the badge live:
 
 **`branding.py`** paints the window icon and the welcome logo at runtime (one
 rounded tile, a card stack and two chevrons) so the project ships no binary
-assets; `app.py` and `WelcomeScreen` share it.
+assets in `src/`; `app.py` and `WelcomeScreen` share it. `export_icons()` replays
+the same painter code into PNGs and an SVG for the desktop icon theme, but only
+when `packaging/render_icons.py` asks for it: rendering icons is a packaging
+concern, never a startup side effect.
 
 **`CardAnimator`** owns only what happens *around* a card, because the card
 already animates itself: it flies out on commit (250 ms) and springs back when a
@@ -782,5 +785,7 @@ Tracked here so the implementation does not silently pick an answer:
   listed in the `F1` overlay, and a rescan never loses the counters or the undo
   history.
 - **M5 (distribution)**: `pip install .` produces a working `image-swiper`
-  command on a clean Debian/Fedora/Arch VM; a `.desktop` file launches it.
+  command on a clean Debian/Fedora/Arch VM; a `.desktop` file launches it, the
+  icon resolves through the `hicolor` theme, `install-desktop.sh --uninstall`
+  removes it again, and the AppImage runs on a machine without Python.
 
