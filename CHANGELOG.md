@@ -13,48 +13,7 @@ artefact. New entries go under `[Unreleased]` and move down when a tag is cut �
 
 ## [Unreleased]
 
-### Added
-
-- The About box has a **Buy me a coffee** button that opens
-  <https://buymeacoffee.com/2re.me> in the default browser
-  (`ui.branding.SUPPORT_URL`); *Close* stays the default action.
-- Releases now ship an **AppImage** as well:
-  `swipey-photos-<tag>-linux-x86_64.AppImage` is built by
-  `packaging/appimage/build-appimage.sh` and carries CPython, PyQt6 and the Qt
-  system libraries, so it starts on a machine with neither Python nor the README
-  packages (84 MB). The script lets `appimagetool` unpack itself where FUSE is
-  missing, and `.github/workflows/release.yml` builds and smoke-tests the file
-  (`APPIMAGE_EXTRACT_AND_RUN=1 ./… --version`) before attaching it.
-
-### Changed
-
-- The app is now **Swipey Photos**. The rename covers the import package
-  (`swipey_photos`), the command (`swipey-photos`), the desktop entry and icon
-  stem (`swipey-photos`), the logger namespace, and the state directories
-  (`~/.config/swipey-photos/`, `~/.local/share/swipey-photos/logs/`). Because
-  `1.0.0` was never tagged, there is nothing to migrate: reinstall (the old
-  `image-swiper` command and config directory can be deleted).
-- The four footer buttons now spell out the gesture they trigger — `← Bad`,
-  `↓ OK`, `↑ Great`, `Good →` — so the swipe map is legible without hovering a
-  tooltip. The labels live in `ui.main_window.CATEGORY_BUTTON_LABELS`.
-- Removed the gesture legend that repeated those labels under the card. The
-  stage is now exactly the card plus its caption, which returns the vertical
-  space to the image.
-- CI reports coverage (`pytest-cov`) and runs the GUI suite a second time on a
-  virtual X server, so the `xcb` platform plugin is exercised too.
-- Added a PyInstaller recipe (`swipey-photos.spec`), `scripts/build.sh` and a
-  tag-triggered release workflow; `pip install ".[binary]"` is the only extra
-  requirement for building a standalone executable.
-
-### Fixed
-
-- The About box's *Buy me a coffee* button now opens the browser for real. It
-  went through `QDesktopServices.openUrl()`, which on Wayland desktops that
-  route through `xdg-desktop-portal` returns `True` and opens nothing — the
-  click looked like a no-op. The new `utils/browser.py` drives `xdg-open`, then
-  `gio open`, then `webbrowser`, checks the exit status of each, and the window
-  names the URL in the status bar when no launcher accepts it. The About text
-  shows the URL as selectable text as well, so it can always be copied.
+_Nothing yet._
 
 ## [1.0.0] - 2026-11-17
 
@@ -91,8 +50,44 @@ integration ship together; everything listed below is in the release artefact.
   the config file.
 - **Desktop integration** — `.desktop` entry, generated `hicolor` icon tree
   (`packaging/icons/`), `packaging/install-desktop.sh` for user- or
-  system-wide installs, and an AppImage build script that bundles CPython and
-  PyQt6.
+  system-wide installs, and an AppImage build script that bundles CPython,
+  PyQt6 and the Qt system libraries.
+- **Release artefacts** — the one-file PyInstaller binary and, from the same
+  recipe CI runs, `swipey-photos-<tag>-linux-x86_64.AppImage` (84 MB: no Python
+  and no Qt packages to install), next to the wheel and the sdist.
+- **Buy me a coffee** — the About box has a support button that opens
+  <https://buymeacoffee.com/2re.me> in the browser (`ui.branding.SUPPORT_URL`);
+  *Close* stays the default action.
+
+### Changed
+
+- The app is now **Swipey Photos**. The rename covers the import package
+  (`swipey_photos`), the command (`swipey-photos`), the desktop entry and icon
+  stem (`swipey-photos`), the logger namespace, and the state directories
+  (`~/.config/swipey-photos/`, `~/.local/share/swipey-photos/logs/`). Because
+  `1.0.0` was never tagged, there is nothing to migrate: reinstall (the old
+  `image-swiper` command and config directory can be deleted).
+- The four footer buttons now spell out the gesture they trigger — `← Bad`,
+  `↓ OK`, `↑ Great`, `Good →` — so the swipe map is legible without hovering a
+  tooltip. The labels live in `ui.main_window.CATEGORY_BUTTON_LABELS`.
+- Removed the gesture legend that repeated those labels under the card. The
+  stage is now exactly the card plus its caption, which returns the vertical
+  space to the image.
+- CI reports coverage (`pytest-cov`) and runs the GUI suite a second time on a
+  virtual X server, so the `xcb` platform plugin is exercised too.
+- Added a PyInstaller recipe (`swipey-photos.spec`), `scripts/build.sh` and a
+  tag-triggered release workflow; `pip install ".[binary]"` is the only extra
+  requirement for building a standalone executable.
+
+### Fixed
+
+- The About box's *Buy me a coffee* button now opens the browser for real. It
+  went through `QDesktopServices.openUrl()`, which on Wayland desktops that
+  route through `xdg-desktop-portal` returns `True` and opens nothing — the
+  click looked like a no-op. The new `utils/browser.py` drives `xdg-open`, then
+  `gio open`, then `webbrowser`, checks the exit status of each, and the window
+  names the URL in the status bar when no launcher accepts it. The About text
+  shows the URL as selectable text as well, so it can always be copied.
 
 ### Documentation
 
@@ -113,7 +108,7 @@ integration ship together; everything listed below is in the release artefact.
 - Two-finger touchpad "flick" gestures depend on the compositor; the keyboard
   bindings are the reliable fallback.
 - There is no PyPI release; install from a wheel, from a checkout, with
-  `pipx install git+…`, or use the standalone binary.
+  `pipx install git+…`, or use the standalone binary or the AppImage.
 
 [Unreleased]: https://github.com/torreyn/swipey-photos/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/torreyn/swipey-photos/releases/tag/v1.0.0
