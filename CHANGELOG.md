@@ -1,0 +1,90 @@
+# Changelog
+
+All notable changes to ImageSwiper are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+The `0.x` series was the internal development track (milestones `M0`–`M4` in the
+README roadmap). It was never tagged or published, so the first entry below is
+the first public release; `0.1.0` therefore never existed as a downloadable
+artefact. New entries go under `[Unreleased]` and move down when a tag is cut —
+`tests/test_packaging.py` fails if the shipped version has no section here.
+
+## [Unreleased]
+
+### Changed
+
+- The four footer buttons now spell out the gesture they trigger — `← Bad`,
+  `↓ OK`, `↑ Great`, `Good →` — so the swipe map is legible without hovering a
+  tooltip. The labels live in `ui.main_window.CATEGORY_BUTTON_LABELS`.
+- Removed the gesture legend that repeated those labels under the card. The
+  stage is now exactly the card plus its caption, which returns the vertical
+  space to the image.
+- CI reports coverage (`pytest-cov`) and runs the GUI suite a second time on a
+  virtual X server, so the `xcb` platform plugin is exercised too.
+- Added a PyInstaller recipe (`image-swiper.spec`), `scripts/build.sh` and a
+  tag-triggered release workflow; `pip install ".[binary]"` is the only extra
+  requirement for building a standalone executable.
+
+## [1.0.0] - 2026-11-17
+
+First packaged release. The sorting loop, the comfort pass and the desktop
+integration ship together; everything listed below is in the release artefact.
+
+### Added
+
+- **Four-way swipe sorting** — left → `Bad/`, right → `Good/`, up → `Great/`,
+  down → `OK/`, with a drag threshold of about a third of the window width and a
+  spring-back below it.
+- **Keyboard parity** — arrows and WASD mirror every swipe, plus
+  <kbd>Ctrl</kbd>+<kbd>Z</kbd> (undo), <kbd>Space</kbd> (skip),
+  <kbd>Ctrl</kbd>+<kbd>O</kbd> (open folder), <kbd>F5</kbd> (rescan),
+  <kbd>F11</kbd> (fullscreen), <kbd>F1</kbd> (shortcut overlay).
+- **Non-destructive file moves** — collision-safe (`_1`, `_2`, … suffixes, never
+  an overwrite), cross-device fallback, and an undo stack with a configurable
+  depth. Nothing is ever deleted.
+- **Image pipeline** — folder scan with validation, EXIF orientation, display-only
+  downscaling of huge images, animated GIF first frames, and background prefetch
+  of the next images so navigation stays responsive.
+- **Swipe card** — rounded card with drop shadow, 150 ms entrance animation,
+  rotation and directional colour feedback while dragging, badge on release and
+  a fly-out before the next image appears.
+- **Welcome and summary pages** — recent-folder shortcuts and a per-category
+  tally with restart/pick/quit actions at the end of a folder.
+- **Configuration and logs** — human-editable JSON at
+  `${XDG_CONFIG_HOME}/image-swiper/config.json` (window size, theme, last and
+  recent folders), written atomically with mode `0600`; rotating logs with three
+  backups under `${XDG_DATA_HOME}/image-swiper/logs/`.
+- **`--dry-run`** — logs every decision and touches no file, for rehearsing a
+  sort; `--config` and `-v` for alternate settings and console logging.
+- **Dark mode** — live palette switch from *View → Dark Mode*, or `"theme"` in
+  the config file.
+- **Desktop integration** — `.desktop` entry, generated `hicolor` icon tree
+  (`packaging/icons/`), `packaging/install-desktop.sh` for user- or
+  system-wide installs, and an AppImage build script that bundles CPython and
+  PyQt6.
+
+### Documentation
+
+- `README.md` — installation, usage walkthrough, shortcut table, configuration,
+  FAQ.
+- `docs/ARCHITECTURE.md` — layer contracts, threading model, naming.
+- `docs/CONFIGURATION.md` — key-by-key config reference.
+- `docs/DEVELOPMENT.md` — test inventory and contribution workflow.
+- `docs/PACKAGING.md` — desktop entry, AppImage, Flatpak status, release
+  checklist.
+
+### Known limitations
+
+- Linux is the only supported target; the code stays toolkit-portable, but no
+  Windows or macOS artefact is built.
+- Flatpak is deferred — the runtime does not carry PyQt6 (see
+  [`docs/PACKAGING.md` §5](docs/PACKAGING.md#5-flatpak)).
+- Two-finger touchpad "flick" gestures depend on the compositor; the keyboard
+  bindings are the reliable fallback.
+- There is no PyPI release; install from a wheel, from a checkout, with
+  `pipx install git+…`, or use the standalone binary.
+
+[Unreleased]: https://github.com/torreyn/image-swiper/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/torreyn/image-swiper/releases/tag/v1.0.0

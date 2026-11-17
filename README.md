@@ -9,9 +9,11 @@ subfolder. No tagging dialogs, no multi-select gymnastics — one decisive
 gesture per photo.
 
 [![ci](https://github.com/torreyn/image-swiper/actions/workflows/ci.yml/badge.svg)](https://github.com/torreyn/image-swiper/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/torreyn/image-swiper?sort=semver&display_name=tag)](https://github.com/torreyn/image-swiper/releases/latest)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![Qt](https://img.shields.io/badge/Qt-6-green.svg)](https://www.qt.io/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+[![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-orange.svg)](CHANGELOG.md)
 [![Status](https://img.shields.io/badge/status-v1.0%20released-green.svg)](#project-status)
 
 > **Name note.** `ImageSwiper` is the working title, and the package/CLI
@@ -26,10 +28,22 @@ gesture per photo.
 
 ![ImageSwiper main window — placeholder mock-up](docs/assets/screenshot-main.svg)
 
-*Placeholder mock-up. The application now runs, so a real screenshot of the main
-window, the drag feedback and the summary can replace this image at any time —
-drop `*.png` files into [`docs/assets/`](docs/assets/) and reference them here
-(`QT_QPA_PLATFORM=offscreen` plus `QWidget.grab()` is enough to capture one).*
+*Placeholder mock-up, not a capture of the real window.* Replacing it is a
+five-minute job: [`screenshots/README.md`](screenshots/README.md) has a
+copy-paste script that renders the window with `QT_QPA_PLATFORM=offscreen` and
+`QWidget.grab()`, so no display, window manager or screenshot tool is needed.
+The planned files are:
+
+| File | Shows |
+| --- | --- |
+| `screenshots/main-window.png` | stage header, card, caption, arrow-labelled footer, summary bar |
+| `screenshots/drag-feedback.png` | card mid-drag: rotation, tint and direction badge |
+| `screenshots/summary.png` | completion page with the per-category tally |
+| `screenshots/welcome.png` | welcome page with the recent-folder list |
+
+Only images a document references belong in that folder — read
+[`screenshots/README.md`](screenshots/README.md) for the window size, the naming
+convention and why personal photos must stay out of the repository.
 
 ---
 
@@ -43,11 +57,16 @@ configuration and rotating logs. The Qt side is wired up too: the swipe card
 (drag physics, rotation, directional feedback, drop shadow, fly-out), the stage
 around it, the welcome screen with recent folders, the completion summary and the
 main window (menus, progress, arrow-labelled footer buttons, live status-bar
-counts, config persistence). Install it from a checkout with
-`pip install .`, run it with `image-swiper` or `python -m image_swiper`, and sort a
-folder end to end (388 tests, green on Python 3.11–3.13 in CI). `packaging/` adds
-the `.desktop` entry, the generated icon theme and an AppImage build script — see
-[`docs/PACKAGING.md`](docs/PACKAGING.md).
+counts, config persistence). Install it with `pipx install
+git+https://github.com/torreyn/image-swiper.git`, download the standalone binary
+from the [latest release](https://github.com/torreyn/image-swiper/releases/latest),
+or work from a checkout with `pip install .`; then run `image-swiper` or
+`python -m image_swiper` and sort a folder end to end (397 tests, green on Python
+3.11–3.13 in CI, ~94 % statement coverage). `packaging/` adds the `.desktop`
+entry, the generated icon theme and an AppImage build script, and
+`scripts/build.sh` produces the one-file binary — see
+[`docs/PACKAGING.md`](docs/PACKAGING.md). Release history lives in
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
@@ -64,9 +83,10 @@ Everything below ships in v1.0 unless marked otherwise:
   | Swipe **up** ↑ | <kbd>↑</kbd> / <kbd>W</kbd> | `Great/` | Best-of-set / portfolio |
   | Swipe **down** ↓ | <kbd>↓</kbd> / <kbd>S</kbd> | `OK/` | Neutral / undecided |
 
-- **Non-destructive by design.** Images are *moved* (default) or *copied* into
-  target subfolders — never deleted. Name collisions are resolved by suffixing,
-  never by overwriting.
+- **Non-destructive by design.** Images are *moved* into target subfolders —
+  never deleted, never rewritten. Name collisions are resolved by suffixing,
+  never by overwriting, and a cross-device destination is copied-then-verified
+  before the source disappears.
 - **Undo.** <kbd>Ctrl</kbd>+<kbd>Z</kbd> moves the last image back where it
   came from, up to a configurable history depth.
 - **Keyboard-first alternative.** Arrows and WASD mirror every swipe, so the
@@ -165,7 +185,23 @@ sudo pacman -S --needed python python-pip python-virtualenv \
 
 ### 2. Install ImageSwiper
 
-Not on PyPI yet — install from a checkout or from a release wheel:
+ImageSwiper is not on PyPI yet. Pick one of three routes.
+
+**pipx — isolated, puts `image-swiper` on your `PATH`**
+
+```bash
+pipx install git+https://github.com/torreyn/image-swiper.git
+image-swiper --version          # ImageSwiper 1.0.0
+```
+
+Updating means re-running the same command with `--force`:
+
+```bash
+pipx install --force git+https://github.com/torreyn/image-swiper.git          # newest tag
+pipx install --force git+https://github.com/torreyn/image-swiper.git@main     # bleeding edge
+```
+
+**From a checkout — for development**
 
 ```bash
 git clone https://github.com/torreyn/image-swiper.git
@@ -174,15 +210,41 @@ cd image-swiper
 python3 -m venv .venv
 source .venv/bin/activate          # fish: source .venv/bin/activate.fish
 python -m pip install --upgrade pip
-pip install -e ".[dev]"            # contributing; or: pip install dist/*.whl
+pip install -e ".[dev]"            # contributing; `pip install -e .` for runtime only
 ```
 
-Runtime-only install from the checkout:
+Runtime-only install from the checkout, without the dev tooling:
 
 ```bash
 pip install -r requirements.txt
 pip install -e .            # optional: gives you the `image-swiper` command
 ```
+
+**Standalone binary — no Python required**
+
+Download `image-swiper-<version>-linux-x86_64` from the
+[latest release](https://github.com/torreyn/image-swiper/releases/latest):
+
+```bash
+chmod +x image-swiper-1.0.0-linux-x86_64
+./image-swiper-1.0.0-linux-x86_64 --version
+./image-swiper-1.0.0-linux-x86_64 ~/Pictures/unsorted
+```
+
+The file carries CPython, PyQt6 and Pillow in one executable, but not glibc and
+not the X11 client libraries, so the *system packages* from step 1 are still
+required. To build it yourself:
+
+```bash
+./scripts/build.sh                 # venv + PyInstaller -> dist/image-swiper
+./scripts/build.sh --help          # --venv, --output, --clean, PIP_ARGS
+```
+
+`scripts/build.sh` and the release workflow share
+[`image-swiper.spec`](image-swiper.spec), so a local build and the published
+asset cannot drift apart. For a bundle that also contains the Qt system
+libraries, use the AppImage script instead
+([`docs/PACKAGING.md` §4](docs/PACKAGING.md#4-appimage)).
 
 ### 3. Verify the installation
 
@@ -209,10 +271,13 @@ Paths, icon regeneration and the AppImage build live in
 > edit `Exec=` in the installed `.desktop` file to the absolute path of the
 > script.
 
-> **No Python on the target machine?** A single-file AppImage is buildable from
-> the checkout with `packaging/appimage/build-appimage.sh`. Flatpak is not
-> shipped yet; [`docs/PACKAGING.md`](docs/PACKAGING.md#4-flatpak) explains what a
-> manifest would need.
+> **No Python on the target machine?** Download the standalone binary from the
+> [latest release](https://github.com/torreyn/image-swiper/releases/latest), or
+> build one with `./scripts/build.sh`. If you also want the Qt system libraries
+> inside the bundle, `packaging/appimage/build-appimage.sh` produces a
+> single-file AppImage. Flatpak is not shipped yet;
+> [`docs/PACKAGING.md`](docs/PACKAGING.md#5-flatpak) explains what a manifest
+> would need.
 
 ---
 
@@ -358,23 +423,34 @@ image-swiper/
 │       ├── config.py          # JSON defaults/load/save, XDG paths, recent folders
 │       └── logging_setup.py   # rotating file logs + optional console handler
 ├── tests/                     # pytest suites mirroring src/ (pytest-qt for GUI)
+├── scripts/
+│   └── build.sh               # venv + PyInstaller -> dist/image-swiper
+├── image-swiper.spec          # PyInstaller recipe shared by build.sh and CI
+├── screenshots/               # capture guide + reference images (placeholders)
 ├── packaging/                 # desktop integration, no Python imports needed
 │   ├── image-swiper.desktop   # menu entry: Exec=image-swiper, Icon=image-swiper
 │   ├── install-desktop.sh     # install/uninstall entry + icons (prefix/destdir)
 │   ├── icons/hicolor/         # generated PNG sizes + one scalable SVG
 │   ├── render_icons.py        # regenerate the icon tree from ui/branding.py
-│   └── appimage/build-appimage.sh  # bundle CPython + PyQt6 into one AppImage
+│   ├── appimage/build-appimage.sh  # bundle CPython + PyQt6 into one AppImage
+│   └── pyinstaller/entry.py   # launcher the one-file binary starts from
 ├── docs/
 │   ├── README.md              # documentation index and reading order
 │   ├── ARCHITECTURE.md        # layers, contracts, data flow, state machines
 │   ├── CONFIGURATION.md       # every option, defaults, precedence
 │   ├── DEVELOPMENT.md         # setup, commands, conventions, test strategy
 │   ├── PACKAGING.md           # desktop entry, icons, AppImage, distro notes
-│   └── assets/                # screenshots and mock-ups
+│   └── assets/                # placeholder mock-ups
+├── .github/
+│   ├── workflows/ci.yml       # lint, format, types, tests + coverage, xvfb GUI run
+│   ├── workflows/release.yml  # tag -> binary + wheel + sdist on the Release
+│   └── ISSUE_TEMPLATE/        # bug report and feature request forms
 ├── pyproject.toml             # metadata, deps, tool config, entry point
 ├── requirements.txt           # runtime pins for plain pip workflows
 ├── README.md
-├── CONTRIBUTING.md
+├── CONTRIBUTING.md            # code style, layer rules, PR checklist
+├── CHANGELOG.md               # Keep a Changelog, newest first
+├── SECURITY.md                # private reporting, in-scope filesystem bugs
 ├── LICENSE                    # MIT
 └── .gitignore                 # Python + PyQt + VSCode + Linux noise
 ```
@@ -395,7 +471,7 @@ imports with `ast` and fails on any Qt import below `ui/`. Details and rationale
 | **M2 — Swipe UI** | `swipe_card` (card, drag, badge, fly-out), `swipe_widget` stage, main window, welcome/summary pages, deck fly-in (`animator`) | ✅ done |
 | **M3 — Sorting** | `folder_manager`, `sorter`, `file_ops`, collision handling | ✅ done |
 | **M4 — Comfort** | Undo, config UI + dark mode, summary screen, logging, error reporting, rescan/full-screen/shortcut keys, shortcut overlay, prefetch workers, `--dry-run`, edge-case messaging | ✅ done |
-| **M5 — Distribution** | `.desktop` file, icons, AppImage/Flatpak, 1.0 | ✅ done (v1.0.0; Flatpak deferred, see [PACKAGING §4](docs/PACKAGING.md#4-flatpak)) |
+| **M5 — Distribution** | `.desktop` file, icons, AppImage/Flatpak, 1.0 | ✅ done (v1.0.0; Flatpak deferred, see [PACKAGING §5](docs/PACKAGING.md#5-flatpak)) |
 
 ---
 
@@ -409,12 +485,21 @@ pip install -e ".[dev]"
 python -m image_swiper            # run from source
 pytest -q                         # unit tests
 QT_QPA_PLATFORM=offscreen pytest -q -m gui   # headless GUI tests
+pytest -q --cov=image_swiper --cov-report=term-missing   # coverage
 ruff check . && ruff format --check .
 mypy
+./scripts/build.sh                # standalone binary -> dist/image-swiper
 ```
 
+CI runs `ruff check`, `ruff format --check`, strict `mypy`, the full suite with
+coverage on Python 3.11, 3.12 and 3.13, the GUI tests again under `xvfb-run`
+(so the real `xcb` plugin is exercised), and a packaging job that builds the
+wheel/sdist and installs the wheel into a clean environment — see
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
 Conventions, fixtures and the definition of done for a PR are in
-**[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**.
+**[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**; the release procedure is in
+**[docs/PACKAGING.md §7](docs/PACKAGING.md#7-checklist-before-tagging-a-release)**.
 
 ---
 
@@ -427,9 +512,15 @@ request. In short:
 1. Search existing issues, then open one describing the change.
 2. Fork, branch from `main` (`feat/…`, `fix/…`, `docs/…`).
 3. Keep the layer boundaries: no Qt imports in `core/` or `utils/`.
-4. Add or update tests; `pytest` and `ruff check .` must pass.
-5. Use [Conventional Commits](https://www.conventionalcommits.org/) style.
-6. Open the PR and reference the issue.
+4. Add or update tests; `pytest`, `ruff check .` and `mypy` must pass.
+5. Add an `[Unreleased]` entry to [CHANGELOG.md](CHANGELOG.md) for anything a
+   user can notice.
+6. Use [Conventional Commits](https://www.conventionalcommits.org/) style.
+7. Open the PR and reference the issue — the
+   [checklist](CONTRIBUTING.md#pull-request-checklist) mirrors CI.
+
+Found a filesystem or data-loss bug? Report it privately via
+[SECURITY.md](SECURITY.md) instead of a public issue.
 
 This project follows the
 [Contributor Covenant, v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
@@ -437,6 +528,18 @@ This project follows the
 ---
 
 ## FAQ
+
+**Where do my images go?**
+Into `Good/`, `Bad/`, `Great/` and `OK/` subfolders of **the folder you selected**
+— nothing leaves your library, and the same folder can be re-opened later to
+continue sorting. Images are *moved*, not rewritten: the original file, its
+EXIF data and its quality are untouched, and a name collision gains a `_1`, `_2`
+suffix instead of overwriting anything. When a destination lives on another
+filesystem, the app copies the file, verifies the byte count and only then
+removes the source, because a rename cannot cross devices. Nothing is ever
+deleted — `Bad/` is just a folder, and emptying it is your decision. Rehearse the
+whole thing with `image-swiper --dry-run FOLDER`, which logs what would move and
+touches no file.
 
 **Does it delete rejected photos?**
 No. Rejected images are moved to `Bad/` (or your configured folder). Nothing is

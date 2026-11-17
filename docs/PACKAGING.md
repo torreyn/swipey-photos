@@ -1,16 +1,20 @@
 # Packaging and distribution
 
 How ImageSwiper gets from this repository onto a user's desktop, and what each
-artefact contains. Everything described here lives in [`packaging/`](../packaging)
-and is covered by `tests/test_packaging.py`.
+artefact contains. The desktop integration lives in [`packaging/`](../packaging),
+the binary recipe in [`scripts/build.sh`](../scripts/build.sh) plus
+[`image-swiper.spec`](../image-swiper.spec), and all of it is covered by
+`tests/test_packaging.py`.
 
 | Artefact | Built from | Who uses it |
 | --- | --- | --- |
 | wheel + sdist | `python -m build` | `pip install`, distributions, AppImage |
 | `image-swiper.desktop` | `packaging/` | every menu, dock and task bar |
 | icon theme tree | `packaging/icons/hicolor/` (generated) | the desktop entry's `Icon=` |
-| AppDir / AppImage | `packaging/appimage/build-appimage.sh` | users without Python |
-| Flatpak | not shipped — see [Flatpak](#4-flatpak) | — |
+| one-file binary | `scripts/build.sh` + `image-swiper.spec` | users with Python but no packaging tools |
+| AppDir / AppImage | `packaging/appimage/build-appimage.sh` | users without Python **or** Qt libraries |
+| GitHub Release | `.github/workflows/release.yml` | anyone who wants a download instead of a build |
+| Flatpak | not shipped — see [Flatpak](#5-flatpak) | — |
 
 ---
 
@@ -115,13 +119,74 @@ python -m twine check dist/*                      # if twine is installed
 ```
 
 The wheel installs the package, `py.typed` and the `image-swiper` console script.
-The sdist additionally carries `tests/`, `docs/` and `packaging/`, which is what
-lets a distribution build the desktop entry from a source tarball.
-
+The sdist additionally carries `tests/`, `docs/`, `packaging/`, `scripts/` and
+`image-swiper.spec`, which is what lets a distribution build the desktop entry or
+a standalone binary from a source tarball alone.
 
 ---
 
-## 3. AppImage
+## 3. Standalone binary (PyInstaller)
+
+`scripts/build.sh` writes `dist/image-swiper`: one executable that runs on a
+machine without Python. The release workflow uploads it as
+`image-swiper-<version>-linux-x86_64`.
+
+```bash
+./scripts/build.sh                        # venv + PyInstaller, ~2 minutes cold
+./scripts/build.sh --clean                # rebuild the venv as well
+PYTHON=python3.12 ./scripts/build.sh      # pick the interpreter explicitly
+```
+
+| Piece | Where | Note |
+| --- | --- | --- |
+| recipe | [`image-swiper.spec`](../image-swiper.spec) | one file, windowed, `pathex=["src"]`, 256 px icon |
+| launcher | `packaging/pyinstaller/entry.py` | imports `image_swiper.__main__.main`; see below |
+| entry point | `src/image_swiper/__main__.py` | the same module the console script wraps |
+| build env | `build/venv` | `pip install ".[binary]"`; your shell's venv is untouched |
+| output | `dist/image-swiper` | one file; `du -h` reports about 70 MB |
+
+The launcher exists because PyInstaller runs the file named in `Analysis` as
+top-level code: pointing it at `src/image_swiper/__main__.py` fails with
+`attempted relative import with no known parent package`, since that module uses
+`from . import __version__`. Importing the package from a three-line launcher
+keeps the normal `__package__` context, and `tests/test_packaging.py` fails if the
+spec ever goes back to the module file.
+
+Bundled: CPython, PyQt6 (Qt libraries plus the `platforms` and `imageformats`
+plugins) and Pillow. **Not** bundled: glibc and the X11 client libraries, so a
+minimal container still needs `libxcb-cursor0`, `libxkbcommon-x11-0`, `libegl1`
+and friends — the list is in
+[README → Installation](../README.md#1-system-packages-qt-runtime--python-tooling).
+When you cannot install those, build the AppImage in §4 instead.
+
+The script verifies `dist/image-swiper --version` against
+`image_swiper.__version__`. A deeper manual check, on a throwaway folder:
+
+```bash
+QT_QPA_PLATFORM=offscreen dist/image-swiper --dry-run ~/Pictures/to-sort
+```
+
+Startup is slower than a `pip install`: the one-file bootloader extracts the
+bundle into a temporary directory on every run, so expect about a second before
+the window appears. The AppImage in §4 trades the same way with a squashfs image.
+
+A hand-written spec is required here: a `pyi-makespec` default run cannot import
+`image_swiper` from a src-layout checkout, because `src/` is not on `sys.path`.
+Everything else in the file is the stock one-file recipe, and
+`tests/test_packaging.py` pins its shape (name, no `COLLECT`, windowed, icon
+exists) so an edit cannot silently switch to one-directory output.
+
+Verified on the build machine (Python 3.13, PyInstaller 6.22, ~70 MB):
+`--version` prints `ImageSwiper 1.0.0`, `--help` lists the documented flags, and
+`QT_QPA_PLATFORM=offscreen ./image-swiper --dry-run <copy-of-photos>` starts a
+session, prefetches three previews (so Pillow's JPEG plugin is inside the bundle)
+and leaves every file where it was. PyInstaller logs
+`Ignoring icon; supported only on Windows and macOS!` once — expected on Linux,
+where the icon comes from the icon theme instead of the ELF header.
+
+---
+
+## 4. AppImage
 
 `packaging/appimage/build-appimage.sh` produces a single file that runs on any
 x86-64 Linux distribution — no Python, no PyQt6, no `pip`.
@@ -169,7 +234,7 @@ but the AppImage build itself needs the network and is not part of CI.
 
 ---
 
-## 4. Flatpak
+## 5. Flatpak
 
 Not shipped yet, on purpose. The desktop entry, `StartupWMClass` and icon names
 are already Flatpak-compatible; what is missing is the runtime:
@@ -192,7 +257,7 @@ Python environment.
 
 ---
 
-## 5. Distribution packages
+## 6. Distribution packages
 
 References for a `.deb`/`.rpm`/`PKGBUILD`:
 
@@ -207,16 +272,23 @@ The sdist contains everything those steps need, including `packaging/`.
 
 ---
 
-## 6. Checklist before tagging a release
+## 7. Checklist before tagging a release
 
 1. `QT_QPA_PLATFORM=offscreen python packaging/render_icons.py` — icons match
    `branding.py` (the suite also fails if the tree is incomplete).
-2. `ruff check . && ruff format --check . && mypy && pytest -q`.
-3. `desktop-file-validate packaging/image-swiper.desktop` (run automatically by
+2. Move the `[Unreleased]` entries in [`CHANGELOG.md`](../CHANGELOG.md) into the
+   new version's section; `tests/test_packaging.py` fails until the shipped
+   version has one.
+3. `ruff check . && ruff format --check . && mypy && pytest -q`.
+4. `desktop-file-validate packaging/image-swiper.desktop` (run automatically by
    the suite when the tool is installed).
-4. `./packaging/install-desktop.sh --prefix /usr --destdir /tmp/stage` and check
+5. `./packaging/install-desktop.sh --prefix /usr --destdir /tmp/stage` and check
    the tree; `--uninstall` must remove it again.
-5. `python -m build`, then install the wheel in a throwaway venv and run
+6. `python -m build`, then install the wheel in a throwaway venv and run
    `image-swiper --version`.
-6. Optional: build the AppImage and start it on a machine without Python.
-7. Tag `vX.Y.Z`, upload the wheel, sdist and AppImage.
+7. `./scripts/build.sh`, then `dist/image-swiper --version` and one real sorting
+   session on a scratch folder.
+8. Optional: build the AppImage and start it on a machine without Python.
+9. Tag `vX.Y.Z` and push it — `.github/workflows/release.yml` attaches the
+   binary, wheel and sdist to the Release. Upload the AppImage by hand if you
+   built one; it is not produced in CI (§4).

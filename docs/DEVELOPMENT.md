@@ -10,10 +10,13 @@ strategy, debugging Qt on Linux, and the release checklist.
 | Python | 3.11+ (3.12 recommended) | runtime, typing, `slots` dataclasses |
 | PyQt6 | 6.6+ | Qt 6 bindings |
 | Pillow | 10+ | image validation, EXIF, previews |
-| pytest + pytest-qt | 8.2+ / 4.4+ | unit and GUI tests |
+| pytest + pytest-qt + pytest-cov | 8.2+ / 4.4+ / 5.0+ | unit tests, GUI tests, coverage |
 | ruff | latest | lint, import sorting and formatting (`ruff check` + `ruff format`) |
 | mypy | 1.10+ | strict typing for `src/` |
 | build | 1.2+ | sdist/wheel verification |
+| PyYAML | 6.0+ | `tests/test_packaging.py` parses the workflow files |
+| PyInstaller | 6.10+ | only for `pip install ".[binary]"` / `scripts/build.sh` |
+| Xvfb | optional | `xvfb-run -a pytest -m gui`, the way CI's `gui (xvfb)` job runs |
 | desktop-file-utils | optional | `desktop-file-validate` for `packaging/*.desktop` (the test skips without it) |
 
 System Qt libraries (XCB plugin pieces) are listed in
@@ -69,7 +72,10 @@ Both routes produce an identical `.venv/`; only the installer differs.
 | Types | `mypy` |
 | Build artefacts | `python -m build` |
 | Inspect the wheel | `python -m zipfile -l dist/*.whl` |
-| Coverage (optional) | `pytest --cov=image_swiper --cov-report=term-missing` (needs `pytest-cov`) |
+| Coverage | `pytest -q --cov=image_swiper --cov-report=term-missing` |
+| Coverage report for a reviewer | `pytest -q --cov=image_swiper --cov-report=html && xdg-open htmlcov/index.html` |
+| Standalone binary | `./scripts/build.sh` → `dist/image-swiper` (network, ~2 min) |
+| GUI tests on a real X plugin | `xvfb-run -a pytest -q -m gui` |
 
 `pytest` is configured in `pyproject.toml` with `pythonpath = ["src"]`, so tests
 run against the working tree without reinstalling. Markers `gui` and
@@ -83,6 +89,8 @@ tests/
 ├── helpers.py               # FakeFileDialog stand-in for the folder picker
 ├── test_architecture.py     # layer rules (no Qt in core/utils, docstrings)
 ├── test_package.py          # version + entry point + importability
+├── test_packaging.py        # desktop entry, icon tree, install/build scripts,
+│                            #   PyInstaller spec, workflows, changelog
 ├── test_gui_smoke.py        # PyQt6/pytest-qt harness works headless (gui)
 ├── test_file_ops.py         # collision naming, EXDEV fallback, reverse moves
 ├── test_folder_manager.py   # category folders, validation, collision suffixes
@@ -114,7 +122,9 @@ Principles:
   exists, the source is gone, and no other file changed.
 - **GUI tests run offscreen** in CI: `QT_QPA_PLATFORM=offscreen`. Use
   `qtbot.mousePress/mouseMove/mouseRelease` and `qtbot.keyClick` rather than
-  sleeping.
+  sleeping. The `gui (xvfb)` job runs the same subset again under `xvfb-run`,
+  which loads the real `xcb` plugin — use it locally with
+  `xvfb-run -a pytest -q -m gui` when a failure smells plugin-specific.
 - **Deterministic animations.** Tests pass `duration_ms=0` (or call
   `animator.stop()`); never `time.sleep()` for animation completion.
 - **Regression tests for bugs.** The test must fail on the old code.
@@ -203,6 +213,38 @@ launcher fails `pytest` instead of a user's menu. Desktop install:
 QT_QPA_PLATFORM=offscreen python packaging/render_icons.py          # after branding changes
 ```
 
+### Standalone binary
+
+`scripts/build.sh` creates `build/venv`, installs the project with the `binary`
+extra and runs PyInstaller against `image-swiper.spec`:
+
+```bash
+./scripts/build.sh                 # -> dist/image-swiper
+./scripts/build.sh --clean         # throw the venv away and rebuild it
+./scripts/build.sh --help          # --venv, --output, --clean, PIP_ARGS
+```
+
+The spec is a one-file, windowed build of `packaging/pyinstaller/entry.py` (which
+imports `image_swiper.__main__.main` — PyInstaller runs its entry file as
+top-level code, so `__main__.py`'s relative imports would fail there) with
+`pathex=["src"]`, so the frozen app resolves `image_swiper` exactly like the
+console script does. `tkinter` is the only exclusion — a missing hidden import
+only surfaces at run time, and a few MB are not worth that risk.
+`tests/test_packaging.py` pins the shape of the spec (name, one file, windowed,
+existing icon), so a careless edit fails `pytest` instead of the release job.
+
+The script ends with `dist/image-swiper --version` and compares it with
+`image_swiper.__version__`. For a deeper check, run the binary offscreen against
+a throwaway folder and quit with <kbd>Ctrl</kbd>+<kbd>Q</kbd>:
+
+```bash
+QT_QPA_PLATFORM=offscreen dist/image-swiper --dry-run /tmp/photos-to-sort
+```
+
+The result is **not static**: it carries CPython, PyQt6 and Pillow, but Qt still
+links against the system `libxcb-*` and `libEGL` libraries from the README. Use
+`packaging/appimage/build-appimage.sh` when the target machine has none of them.
+
 [PACKAGING.md](PACKAGING.md) documents the file layout, the AppImage build and
 the Flatpak status.
 
@@ -223,15 +265,24 @@ twine check dist/*
 
 1. `git switch -c release/x.y.z`
 2. Bump `__version__` in `src/image_swiper/__init__.py`.
-3. Update the README roadmap and any changed docs (`CONFIGURATION.md` keys).
-4. Regenerate the icons if `ui/branding.py` changed (§7) and rerun
+3. Move the `[Unreleased]` entries in [`CHANGELOG.md`](../CHANGELOG.md) into a new
+   `## [x.y.z] - YYYY-MM-DD` section and add the compare link at the bottom —
+   `tests/test_packaging.py` fails when the shipped version has no section.
+4. Update the README roadmap and any changed docs (`CONFIGURATION.md` keys).
+5. Regenerate the icons if `ui/branding.py` changed (§7) and rerun
    `desktop-file-validate packaging/image-swiper.desktop`.
-5. `ruff check . && ruff format --check . && mypy && pytest -q`
-6. `python -m build` and verify the wheel in a clean venv (see §7).
-7. Smoke-test on X11 **and** Wayland, with at least one real photo folder.
-8. Install the desktop entry and check the menu icon, then `--uninstall`.
-9. Tag `vX.Y.Z`, push the tag, upload `dist/*` (and the AppImage if built).
-10. Announce changes; keep the previous minor's config schema readable.
+6. `ruff check . && ruff format --check . && mypy && pytest -q`
+7. `python -m build` and verify the wheel in a clean venv (see §7).
+8. `./scripts/build.sh` and smoke-test `dist/image-swiper --version`.
+9. Smoke-test on X11 **and** Wayland, with at least one real photo folder.
+10. Install the desktop entry and check the menu icon, then `--uninstall`.
+11. Tag `vX.Y.Z` and push the tag: `.github/workflows/release.yml` builds the
+    binary, the wheel and the sdist, and attaches them to the GitHub Release.
+    Check the release page — the assets should be `image-swiper-X.Y.Z-linux-x86_64`,
+    `image_swiper-X.Y.Z-py3-none-any.whl` and `image_swiper-X.Y.Z.tar.gz`.
+    (If a runner dies mid-release, re-run the workflow with *Run workflow* and
+    the tag as input instead of re-tagging.)
+12. Announce changes; keep the previous minor's config schema readable.
 
 ## 9. Continuous integration
 
@@ -240,9 +291,13 @@ twine check dist/*
 `fail-fast: false` so one broken interpreter does not hide the others:
 
 1. `ruff check .`
-2. `ruff format --check .`
+2. `ruff format --check .` — this is the project's `black`; a second formatter
+   would make the two disagree on parenthesized asserts
 3. `mypy` — no arguments; `[tool.mypy]` already pins `files` and `strict`
-4. `pytest -q` with `QT_QPA_PLATFORM=offscreen`
+4. `pytest -q --cov=image_swiper --cov-report=term-missing --cov-report=xml`
+   with `QT_QPA_PLATFORM=offscreen`; the XML is uploaded as the `coverage-xml`
+   artefact from the 3.13 leg. Coverage is reported, not enforced, so a PR that
+   adds branches without tests shows up in review instead of blocking the build.
 
 The job apt-installs the Qt platform libraries (`libgl1`, `libxcb-cursor0`, …)
 because PyQt6 loads them at import time; the offscreen plugin then keeps the
@@ -252,6 +307,12 @@ GUI tests display-free. Reproduce a CI run locally with:
 QT_QPA_PLATFORM=offscreen .venv/bin/pytest -q
 ```
 
+A second job, `gui (xvfb)`, runs only the `gui`-marked tests under
+`xvfb-run -a -s "-screen 0 1280x1024x24"`. The offscreen plugin never loads the
+`xcb` plugin a real desktop uses, so this leg is what catches a missing
+`libxcb-*` package or a window-manager assumption. It is also the fastest way to
+reproduce a "passes in CI, fails on my machine" report in reverse.
+
 `pip install -e ".[dev]"` means a dependency added to `pyproject.toml` reaches
 CI without editing the workflow, and the `setup-python` pip cache is keyed on
 `pyproject.toml` for the same reason. If a step starts failing only on a new
@@ -260,16 +321,26 @@ matrix together.
 
 The packaging tests live inside the same `pytest` run: they parse
 `packaging/image-swiper.desktop`, compare the icon tree with
-`ui/branding.ICON_SIZES`, run both shell scripts against `tmp_path` and use
-`desktop-file-validate` when the runner provides it (it is part of
-`desktop-file-utils`, which the Ubuntu image already has). The AppImage build
-itself is *not* in CI — it needs a relocatable CPython plus the network — so it
-is verified by hand before a release (§8).
+`ui/branding.ICON_SIZES`, run the install and build scripts against `tmp_path`,
+`sh -n` the scripts, check the shape of `image-swiper.spec`, parse both workflow
+files with PyYAML and pin the changelog format. `desktop-file-validate` runs when
+the runner provides it (it is part of `desktop-file-utils`, which the Ubuntu
+image already has). The AppImage build itself is *not* in CI — it needs a
+relocatable CPython plus the network — so it is verified by hand before a
+release (§8); the PyInstaller binary *is* built, in the release workflow only.
 
-A second job, `package`, builds the sdist and wheel once (Python 3.13), asserts
+A third job, `package`, builds the sdist and wheel once (Python 3.13), asserts
 that the sdist contains `packaging/image-swiper.desktop` and the scalable icon,
 installs the wheel into a clean virtual environment and runs
 `image-swiper --version`, then uploads `dist/*` as a build artefact.
+
+`.github/workflows/release.yml` is separate because it costs real time and only
+runs on a `v*` tag (or by hand with *Run workflow*). It builds the one-file
+binary with the same `image-swiper.spec` that `scripts/build.sh` uses, smoke-tests
+`--version` and `--help`, runs `python -m build` plus `twine check`, and attaches
+the three assets to the GitHub Release with `generate_release_notes`. The AppImage
+is deliberately not part of it: `appimagetool` and a python-build-standalone
+interpreter are large downloads best done on a workstation (§8).
 
 ## 10. Editor setup (VSCode)
 
@@ -303,3 +374,5 @@ Recommended extensions: `ms-python.python`, `charliermarsh.ruff`,
 | Wrong Qt binding imported | this project targets PyQt6; uninstall PySide6 from the venv if present |
 | `pip install -e .` rebuilds constantly | editable installs with Hatch are cheap; if it is slow, check for a network-mounted venv |
 | mypy complains about Qt stubs | ensure `PyQt6-stubs` is *not* installed alongside PyQt6, which ships its own stubs |
+| `scripts/build.sh` aborts: `could not create a venv` | the interpreter lacks `ensurepip`; install `python3.12-venv` or point `PYTHON=` at one that has it |
+| `dist/image-swiper` starts, then `Could not load the Qt platform plugin "xcb"` | the binary bundles Qt but not the X11 client libraries — install the README system packages, or build the AppImage |

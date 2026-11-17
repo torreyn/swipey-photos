@@ -1,0 +1,59 @@
+name: Feature request
+description: Suggest a behaviour, a shortcut or a workflow improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ImageSwiper is deliberately small: one gesture per photo, four buckets,
+        no database. Ideas that fit that shape land much faster than ideas that
+        add a second workflow — say which one this is.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does it solve?
+      description: Describe the moment in your sorting session where it hurts.
+      placeholder: When I shoot a burst, I want to compare two frames before deciding.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: What should happen? Keys, gestures and UI labels are welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing shortcuts, config keys or another tool that already covers it.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Which part of the app?
+      options:
+        - Swipe card / gesture feel
+        - Keyboard shortcuts
+        - Sorting and file moves
+        - Folder scanning and image loading
+        - Configuration or theming
+        - Packaging / installation
+        - Something else
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Fits the project's non-goals?
+      description: The README lists them (cloud sync, ML tagging, RAW development, databases, Windows/macOS builds).
+      options:
+        - label: This does not require a database, cloud sync, ML auto-tagging or RAW decoding
+          required: true

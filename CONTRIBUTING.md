@@ -104,7 +104,8 @@ app.py  →  ui/  →  core/  →  utils/
 ```bash
 pytest -q                                  # headless unit tests
 QT_QPA_PLATFORM=offscreen pytest -q -m gui  # GUI tests (no display needed)
-pytest --cov=image_swiper --cov-report=term-missing   # if pytest-cov installed
+pytest -q --cov=image_swiper --cov-report=term-missing   # coverage (pytest-cov)
+sh scripts/build.sh                        # optional: standalone binary, needs network
 ```
 
 Guidelines:
@@ -112,8 +113,14 @@ Guidelines:
 - Mirror the source tree: `tests/test_sorter.py` tests `core/sorter.py`.
 - Use `tmp_path` and the `make_images` fixture from `tests/conftest.py` instead
   of touching the real filesystem.
-- GUI tests must be marked `@pytest.mark.gui` and run offscreen in CI.
+- GUI tests must be marked `@pytest.mark.gui` and run offscreen in CI; the
+  `gui (xvfb)` job runs the same subset again on a virtual X server.
 - Bug fixes come with a regression test that fails before the fix.
+- `tests/test_packaging.py` is the contract for everything outside `src/`: the
+  desktop entry, the icon tree, the install and build scripts, the PyInstaller
+  spec, the workflows and the changelog. Extend it when you touch those files —
+  the `binary` extra (`pip install ".[binary]"`) is only needed for a real
+  PyInstaller build, which CI does in the release workflow.
 
 ---
 
@@ -134,9 +141,36 @@ Guidelines:
    (screenshots/GIFs for UI changes). Link the issue with `Closes #123`.
 5. Keep PRs small. A 400-line PR gets reviewed quickly; a 4 000-line PR does
    not. Refactors and behaviour changes belong in separate PRs.
-6. Update the docs when behaviour, configuration keys or shortcuts change.
+6. Update the docs when behaviour, configuration keys or shortcuts change, and
+   add an `[Unreleased]` entry to [CHANGELOG.md](CHANGELOG.md) for anything a
+   user can notice.
 
 A maintainer will review, request changes if needed, and squash-merge.
+
+---
+
+## Pull request checklist
+
+CI enforces the first four; the rest are what a reviewer looks for. The same list
+is pre-filled in the [PR template](.github/pull_request_template.md).
+
+- [ ] `ruff check .` — the configured rule set, no `# noqa` without a reason
+- [ ] `ruff format --check .` — **not** `black`: the project has exactly one
+      formatter, and mixing the two makes CI unsatisfiable
+- [ ] `mypy` — strict, over `src/image_swiper`; new public functions are fully
+      annotated
+- [ ] `pytest -q` — includes `tests/test_architecture.py` (naming and Qt-free
+      `core/`+`utils/`) and `tests/test_packaging.py` (artefacts and workflows)
+- [ ] GUI changes come with a `@pytest.mark.gui` test and a screenshot/GIF
+- [ ] The PR touches one concern; unrelated reformatting is split out
+- [ ] Layer boundaries hold: no `PyQt6` import below `ui/`, imports point down
+- [ ] File-moving code is collision-safe, never deletes data, and has a test for
+      the failure path (duplicate name, cross-device, permission denied)
+- [ ] Docs updated: README/`docs/` for behaviour, README shortcut table for keys,
+      `docs/CONFIGURATION.md` for new config keys
+- [ ] `CHANGELOG.md` has an `[Unreleased]` entry
+- [ ] No personal photos, absolute home paths, API tokens or `*.log` files in the
+      diff (`screenshots/README.md` explains how to generate demo images)
 
 ---
 

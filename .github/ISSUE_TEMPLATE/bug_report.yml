@@ -1,0 +1,93 @@
+name: Bug report
+description: Something crashed, misbehaved or looked wrong
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! The three fields below decide most diagnoses, so
+        please fill them in even if the bug looks obvious.
+
+        Found a security problem (files written outside the folder you picked,
+        path traversal, symlink escapes)? Do not file it here — report it
+        privately as described in SECURITY.md.
+
+  - type: input
+    id: version
+    attributes:
+      label: ImageSwiper version
+      description: Output of `image-swiper --version` (or the release asset name).
+      placeholder: ImageSwiper 1.0.0
+    validations:
+      required: true
+
+  - type: input
+    id: system
+    attributes:
+      label: Distribution and desktop
+      description: Output of `cat /etc/os-release | head -2`, `echo $XDG_SESSION_TYPE`, and your desktop environment.
+      placeholder: Ubuntu 24.04, X11, GNOME 46
+    validations:
+      required: true
+
+  - type: input
+    id: runtime
+    attributes:
+      label: Python and Qt versions
+      description: |
+        `python -V` and `python -c "from PyQt6.QtCore import QT_VERSION_STR; print(QT_VERSION_STR)"`,
+        or "standalone binary" if you used the release executable.
+      placeholder: Python 3.12.3, Qt 6.7.2
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps, starting from launching the app.
+      placeholder: |
+        1. `image-swiper ~/Pictures/to-sort`
+        2. Swipe right on the third image
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include the exact error text, or a screenshot of the wrong state.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log output
+      description: |
+        The tail of `~/.local/share/image-swiper/logs/image-swiper.log`, or the
+        terminal output of `image-swiper -v`. Redact paths you consider private.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Filesystem check
+      description: |
+        File moves are the only destructive-looking thing the app does; knowing
+        whether they were involved narrows things down a lot.
+      options:
+        - label: The bug involves files being moved (or not moved) between folders
+          required: false
+        - label: I reproduced it with `--dry-run`, which touches no files
+          required: false

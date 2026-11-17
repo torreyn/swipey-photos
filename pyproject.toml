@@ -35,10 +35,17 @@ dependencies = [
 dev = [
   "pytest>=8.2",
   "pytest-qt>=4.4",
+  "pytest-cov>=5.0",
   "ruff>=0.5",
   "mypy>=1.10",
   "build>=1.2",
+  # PyYAML lets tests/test_packaging.py parse the workflow files, so a broken
+  # `ci.yml` fails locally instead of on the first push.
+  "pyyaml>=6.0",
 ]
+# `pip install ".[binary]"` is all scripts/build.sh and the release workflow
+# need; PyInstaller is kept out of the dev extra because it is ~50 MB.
+binary = ["pyinstaller>=6.10"]
 
 [project.scripts]
 image-swiper = "image_swiper.__main__:main"
@@ -61,9 +68,14 @@ include = [
   "/tests",
   "/docs",
   "/packaging",
+  "/scripts",
+  "/screenshots",
   "/README.md",
   "/LICENSE",
   "/CONTRIBUTING.md",
+  "/CHANGELOG.md",
+  "/SECURITY.md",
+  "/image-swiper.spec",
   "/pyproject.toml",
   "/requirements.txt",
 ]
@@ -106,3 +118,21 @@ python_version = "3.11"
 strict = true
 files = ["src/image_swiper"]
 warn_unreachable = true
+
+[tool.coverage.run]
+# Measure the package, not the tests; `pip install -e .` keeps the paths stable.
+source = ["image_swiper"]
+branch = true
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+# Platform-specific and defensive branches that cannot be exercised in CI.
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+]
+

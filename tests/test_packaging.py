@@ -1,9 +1,10 @@
-"""Desktop-integration contract for the files under ``packaging/``.
+"""Release contract for everything outside ``src/``.
 
 These tests are what keeps the release artefacts honest: the ``.desktop`` entry,
-the icon theme tree and the two shell scripts are validated here instead of by
-eyeballing a diff. They mirror ``packaging/`` the way the other modules mirror
-``src/``.
+the icon theme tree, the install and build scripts, the PyInstaller recipe, the
+GitHub workflows, the changelog and the sdist manifest are validated here instead
+of by eyeballing a diff. They mirror the repository layout the way the other
+modules mirror ``src/``.
 
 Conventions
     * Nothing here needs a display, except the icon tests, which are marked
@@ -12,6 +13,9 @@ Conventions
       ``tmp_path``; no test writes to ``$HOME`` or to ``$XDG_DATA_HOME``.
     * ``desktop-file-validate`` is used when the distribution provides it and
       skipped otherwise, so the suite stays usable on minimal systems.
+    * The workflow assertions need PyYAML (part of the ``dev`` extra) and skip
+      without it; the YAML is parsed, not grepped, because that is the failure
+      mode GitHub would reject.
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ import shutil
 import subprocess
 import tomllib
 from pathlib import Path
+from typing import Any
 
 import pytest
 from PIL import Image
@@ -38,6 +43,10 @@ DESKTOP_FILE = PACKAGING / "image-swiper.desktop"
 ICON_TREE = PACKAGING / "icons" / "hicolor"
 INSTALLER = PACKAGING / "install-desktop.sh"
 BUILDER = PACKAGING / "appimage" / "build-appimage.sh"
+SPEC_FILE = ROOT / "image-swiper.spec"
+BUILD_SCRIPT = ROOT / "scripts" / "build.sh"
+WORKFLOWS = ROOT / ".github" / "workflows"
+CHANGELOG = ROOT / "CHANGELOG.md"
 
 
 def _desktop_entry() -> configparser.RawConfigParser:
@@ -56,6 +65,18 @@ def _script_env(**overrides: str) -> dict[str, str]:
     }
     env.update(overrides)
     return env
+
+
+def _workflow(name: str) -> dict[str, Any]:
+    """Parse one GitHub workflow; skips when PyYAML is missing."""
+    yaml = pytest.importorskip("yaml")
+    return yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
+
+
+def _job_runs(workflow: dict[str, Any], job: str) -> str:
+    """Return every ``run:``/``uses:`` value of *job* as one searchable string."""
+    steps = workflow["jobs"][job]["steps"]
+    return "\n".join(str(step.get("run") or step.get("uses") or "") for step in steps)
 
 
 def test_desktop_entry_declares_every_key_launchers_need() -> None:
@@ -232,7 +253,7 @@ def test_installer_defaults_to_xdg_data_home(tmp_path: Path) -> None:
     assert (data_home / "icons" / "hicolor" / "256x256" / "apps" / "image-swiper.png").is_file()
 
 
-@pytest.mark.parametrize("script", [INSTALLER, BUILDER])
+@pytest.mark.parametrize("script", [INSTALLER, BUILDER, BUILD_SCRIPT])
 def test_scripts_reject_unknown_arguments(script: Path) -> None:
     """Unknown options must fail loudly instead of half-doing the job."""
     result = subprocess.run(
@@ -247,7 +268,7 @@ def test_scripts_reject_unknown_arguments(script: Path) -> None:
     assert "unknown argument" in result.stderr
 
 
-@pytest.mark.parametrize("script", [INSTALLER, BUILDER])
+@pytest.mark.parametrize("script", [INSTALLER, BUILDER, BUILD_SCRIPT])
 def test_shell_scripts_are_syntactically_valid(script: Path) -> None:
     """``sh -n`` catches what a Python-only test run would otherwise miss."""
     result = subprocess.run(["sh", "-n", str(script)], capture_output=True, text=True, check=False)
@@ -276,3 +297,120 @@ def test_sdist_ships_the_packaging_directory() -> None:
     include = metadata["tool"]["hatch"]["build"]["targets"]["sdist"]["include"]
 
     assert "/packaging" in include
+    # Same reasoning for the binary recipe: a maintainer must be able to unpack
+    # the sdist, run scripts/build.sh and get the released executable.
+    assert "/image-swiper.spec" in include
+    assert "/scripts" in include
+    assert "/CHANGELOG.md" in include
+
+
+def test_pyinstaller_spec_freezes_a_one_file_windowed_binary() -> None:
+    """One file, not a directory, started from the console-script entry point."""
+    spec = SPEC_FILE.read_text(encoding="utf-8")
+
+    assert 'name="image-swiper"' in spec
+    assert "console=False" in spec
+    collect_calls = [line for line in spec.splitlines() if line.lstrip().startswith("COLLECT(")]
+    assert not collect_calls, "COLLECT() would produce a directory instead of one file"
+    # The launcher, not src/image_swiper/__main__.py: PyInstaller runs the entry
+    # script as top-level code, which breaks __main__.py's relative imports.
+    assert '"entry.py"' in spec
+    assert "pathex=[str(SRC)]" in spec, "src/ has to be importable during the analysis"
+    assert 'excludes=["tkinter"]' in spec
+
+
+def test_pyinstaller_launcher_delegates_to_the_console_entry_point() -> None:
+    """The frozen binary must behave exactly like the ``image-swiper`` script."""
+    launcher = (PACKAGING / "pyinstaller" / "entry.py").read_text(encoding="utf-8")
+
+    assert "from image_swiper.__main__ import main" in launcher
+    assert "SystemExit(main())" in launcher
+
+
+def test_pyinstaller_spec_points_at_a_shipped_icon() -> None:
+    """The ``icon=`` argument must name a file that exists, not a stale path."""
+    spec = SPEC_FILE.read_text(encoding="utf-8")
+    icon = ICON_TREE / "256x256" / "apps" / f"{branding.ICON_NAME}.png"
+
+    assert '"packaging" / "icons" / "hicolor" / "256x256"' in spec
+    assert f'"{branding.ICON_NAME}.png"' in spec
+    assert icon.is_file()
+
+
+def test_build_script_is_executable_and_documents_its_contract() -> None:
+    """``scripts/build.sh`` is run directly, so its mode is part of the contract."""
+    assert os.access(BUILD_SCRIPT, os.X_OK), "commit scripts/build.sh with mode 755"
+
+    result = subprocess.run(
+        ["sh", str(BUILD_SCRIPT), "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_script_env(),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "dist/image-swiper" in result.stdout
+    assert "PIP_ARGS" in result.stdout
+
+
+def test_ci_workflow_runs_the_documented_checks() -> None:
+    """Lint, format, types and coverage run on ubuntu-latest for 3.11 and 3.12."""
+    ci = _workflow("ci.yml")
+    matrix = ci["jobs"]["checks"]["strategy"]["matrix"]["python-version"]
+    runs = _job_runs(ci, "checks")
+
+    assert {"3.11", "3.12"} <= set(matrix)
+    assert "ruff check ." in runs
+    assert "ruff format --check ." in runs
+    assert "mypy" in runs
+    assert "--cov=image_swiper" in runs
+    # PyQt6 needs the xcb libraries before the first import, not just in the
+    # GUI leg, because the unit tests import Qt too.
+    assert "libxkbcommon-x11-0" in runs
+
+
+def test_ci_workflow_runs_the_gui_tests_under_xvfb() -> None:
+    """The offscreen plugin is not the xcb plugin a real desktop loads."""
+    runs = _job_runs(_workflow("ci.yml"), "gui-xvfb")
+
+    assert "xvfb-run" in runs
+    assert "-m gui" in runs
+
+
+def test_release_workflow_attaches_the_binary_to_a_tagged_release() -> None:
+    """A ``v*`` tag produces one release with binary, wheel and sdist."""
+    release = _workflow("release.yml")
+    # PyYAML resolves the unquoted `on:` key to boolean True (YAML 1.1).
+    triggers = release.get("on") or release.get(True)
+
+    assert triggers["push"]["tags"] == ["v*"]
+    assert "workflow_dispatch" in triggers
+
+    jobs = release["jobs"]
+    assert jobs["publish"]["needs"] == ["binary", "dist"]
+    assert jobs["publish"]["permissions"]["contents"] == "write"
+    assert release["permissions"]["contents"] == "read", "only the publish job may write"
+
+    binary_runs = _job_runs(release, "binary")
+    assert "image-swiper.spec" in binary_runs
+    assert "--version" in binary_runs, "the binary is smoke-tested before it is uploaded"
+
+    assert "softprops/action-gh-release" in _job_runs(release, "publish")
+    upload = next(
+        step for step in jobs["publish"]["steps"] if "gh-release" in str(step.get("uses", ""))
+    )
+    assert upload["with"]["files"] == "release-assets/*"
+    assert upload["with"]["tag_name"]
+
+
+def test_changelog_follows_keep_a_changelog() -> None:
+    """The changelog opens with Unreleased and already knows the shipped version."""
+    from image_swiper import __version__
+
+    changelog = CHANGELOG.read_text(encoding="utf-8")
+
+    assert changelog.startswith("# Changelog")
+    assert "Keep a Changelog" in changelog
+    assert "## [Unreleased]" in changelog
+    assert f"## [{__version__}]" in changelog, "tag the version before releasing it"

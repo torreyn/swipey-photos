@@ -1,0 +1,123 @@
+name: release
+
+# Tag a commit (`git tag -a v1.0.0 -m "1.0.0" && git push origin v1.0.0`) and
+# this workflow attaches the artefacts to the GitHub Release: a one-file Linux
+# binary, the wheel and the sdist.
+#
+# Manual runs (`workflow_dispatch`) take the tag as an input, so a re-upload
+# after a flaky runner does not need a new tag.
+#
+# The AppImage is *not* built here: packaging/appimage/build-appimage.sh needs
+# appimagetool plus a python-build-standalone interpreter (a ~150 MB download)
+# and is documented as a local/optional step in docs/PACKAGING.md §4.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to publish, e.g. v1.0.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  binary:
+    name: binary (linux x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # PyInstaller imports PyQt6 while running its hooks; the same libraries
+      # the test job needs keep that import happy.
+      - name: Install the Qt platform libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libegl1 libxkbcommon-x11-0 libxcb-cursor0 \
+            libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 \
+            libxcb-xinerama0 libxcb-randr0
+
+      - name: Install the project and PyInstaller
+        run: pip install ".[binary]"
+
+      # Same recipe as scripts/build.sh, so a local build and the released
+      # binary cannot drift apart.
+      - name: Build the one-file executable
+        run: pyinstaller --clean --noconfirm --distpath dist image-swiper.spec
+
+      - name: Smoke-test the binary
+        run: |
+          ./dist/image-swiper --version
+          ./dist/image-swiper --help > /dev/null
+
+      - name: Name the asset after the tag
+        run: mv dist/image-swiper "dist/image-swiper-${TAG}-linux-x86_64"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary
+          path: dist/image-swiper-*
+          if-no-files-found: error
+
+  dist:
+    name: sdist + wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Build and check the distributions
+        run: |
+          pip install build twine
+          python -m build
+          python -m twine check dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: publish
+    needs: [binary, dist]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List the assets
+        run: ls -l release-assets
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          files: release-assets/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true

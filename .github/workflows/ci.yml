@@ -43,6 +43,9 @@ jobs:
       - name: Install project
         run: pip install -e ".[dev]"
 
+      # `ruff format` is the project's formatter, so there is no separate
+      # `black --check` step: CONTRIBUTING.md rules black out precisely because
+      # the two formatters disagree on parenthesized asserts.
       - name: Lint
         run: ruff check .
 
@@ -53,10 +56,51 @@ jobs:
       - name: Type-check
         run: mypy
 
-      - name: Test
+      # Coverage is reported, not enforced: the number moves whenever a GUI test
+      # is added, and a brittle --cov-fail-under blocks honest refactors. The
+      # XML lands as an artifact so a reviewer can diff the holes in a PR.
+      - name: Test with coverage
         env:
           QT_QPA_PLATFORM: offscreen
-        run: pytest -q
+        run: pytest -q --cov=image_swiper --cov-report=term-missing --cov-report=xml
+
+      - name: Upload the coverage report
+        if: matrix.python-version == '3.13'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: error
+
+  # The job above runs Qt on the "offscreen" platform plugin, which is fast but
+  # never touches the xcb plugin a real desktop uses. This leg runs the GUI tests
+  # on a virtual X server instead, so a missing libxcb-* or a window-manager
+  # assumption fails here rather than on a user's machine.
+  gui-xvfb:
+    name: gui (xvfb)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Xvfb and the Qt platform libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb libgl1 libegl1 libxkbcommon-x11-0 libxcb-cursor0 \
+            libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 \
+            libxcb-xinerama0 libxcb-randr0 libxcb-render-util0 libxcb-xfixes0
+
+      - name: Install project
+        run: pip install -e ".[dev]"
+
+      - name: GUI tests on a virtual X server
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" pytest -q -m gui
 
   package:
     name: package
@@ -82,6 +126,10 @@ jobs:
           python -m zipfile -l dist/*.whl
           tar -tzf dist/*.tar.gz | grep -q '^image_swiper-[^/]*/packaging/image-swiper.desktop$'
           tar -tzf dist/*.tar.gz | grep -q '^image_swiper-[^/]*/packaging/icons/hicolor/scalable/apps/image-swiper.svg$'
+          # The binary recipe must travel with the sources; scripts/build.sh is
+          # useless without the spec it points at.
+          tar -tzf dist/*.tar.gz | grep -q '^image_swiper-[^/]*/image-swiper.spec$'
+          tar -tzf dist/*.tar.gz | grep -q '^image_swiper-[^/]*/scripts/build.sh$'
 
       - name: Install the wheel in a clean environment
         run: |
